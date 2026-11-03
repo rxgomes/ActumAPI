@@ -1,0 +1,11 @@
+<Project>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  
+  <PropertyGroup>
+    <!-- Projetos Shared são consumidos por todos os módulos: qualquer membro público precisa de XML doc
+         (mais rígido que o CLAUDE.md, que exige só em interfaces). Reativa o CS1591 silenciado na raiz. -->
+    <NoWarn>$(NoWarn.Replace('CS1591', ''))</NoWarn>
+  </PropertyGroup>
+
+</Project>

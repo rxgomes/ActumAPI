@@ -1,0 +1,74 @@
+schema: spec-driven
+
+context: |
+  Language: pt-BR
+  All artifacts must be written in pt-BR.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Projeto: Actum API
+  - Organizador pessoal de demandas recebidas pelo Asana, de uso local e por
+    um único usuário (sem autenticação).
+  - O gerenciamento (prazo interno, status interno, retrabalho, branches) fica
+    no banco próprio. O Asana é fonte de entrada (tarefas atribuídas ao usuário,
+    em dois workspaces: Aureum-ERP e aremas.com.br) e destino de saída
+    (tags de branch e conclusão da tarefa).
+  - Visão geral do produto e decisões em docs/especificacao-fase1.md.
+  - Este repositório contém apenas a API. O front-end fica em um repositório
+    separado (..\ActumUI), com Vue 3 + TypeScript + Vite + Pinia + Quasar, e
+    consome esta API via HTTP/JSON.
+
+  Stack
+  - .NET 10 (C#), ASP.NET Core Web API.
+  - PostgreSQL com Entity Framework Core (provider Npgsql).
+  - Arquitetura: monolito modular, com a mesma fundação do Clavus
+    (E:\Ixact\Clavus\ClavusAPI): Shared.Abstractions, Shared.Infrastructure,
+    entidade base, Problem Details e CORS.
+
+  Monolito modular
+  - Cada módulo de negócio é um projeto próprio (ex.: Actum.Modules.<Modulo>),
+    com suas camadas internas, entidades, regras e endpoints.
+  - Um único banco PostgreSQL para todo o sistema. Cada módulo usa seu
+    próprio schema e seu próprio DbContext, com migrations separadas.
+  - Um projeto host (Actum.Api) apenas compõe os módulos: registra
+    serviços, endpoints e middlewares.
+  - Endpoints em Minimal API. Cada módulo declara seus endpoints em
+    classes próprias na pasta Endpoints/, uma por recurso; IModule.MapEndpoints
+    só delega e o host não declara endpoints de negócio. DTOs ficam em Contracts/.
+  - Código compartilhado (abstrações, utilitários) fica em projetos
+    Actum.Shared.*, sem regra de negócio.
+  - Um módulo não acessa entidades, DbContext ou tabelas de outro módulo
+    diretamente; a integração passa por contratos públicos do módulo.
+  - Nomes no banco em snake_case minúsculo, consultáveis sem aspas.
+  - Datas em timestamp without time zone (ou date); nunca timestamptz.
+
+  Asana
+  - Base https://app.asana.com/api/1.0, Personal Access Token em
+    dotnet user-secrets (chave Asana:Token). O token nunca é versionado,
+    logado ou devolvido pela API.
+
+  Convenções
+  - Padrões de código (chaves, XML doc em interfaces, nomenclatura,
+    nome de migrations) definidos em CLAUDE.md, na raiz do repositório.
+  - Documentação e mensagens ao usuário em pt-BR.
+  - Contratos da API (DTOs) documentados via OpenAPI, pois o front depende deles.
+  - Mudanças que alteram contratos da API devem descrever o impacto no front.
+
+rules:
+  proposal:
+    - Indicar quais módulos são afetados pela mudança
+    - Indicar se há mudança de contrato da API (breaking ou não) e impacto no front (..\ActumUI)
+    - Declarar explicitamente o que está fora do escopo
+  design:
+    - Descrever alterações de banco (schema do módulo, tabelas, migrations) usando nomes em snake_case e tipos de data sem timezone
+    - Justificar qualquer dependência nova entre módulos
+  tasks:
+    - Agrupar tarefas por módulo
+    - Incluir tarefas de migration e de testes quando aplicável
+    - Nomear migrations com o prefixo de data yyyyMMdd_
+
+operations:
+  apply:
+    guidance:
+      - Seguir os padrões de código de CLAUDE.md em todo código novo ou modificado
+      - Em interfaces novas, preencher <author>, <created> e <modified>; ao alterar uma assinatura existente, atualizar apenas <modified>
+      - Não reformatar código legado fora do escopo da mudança

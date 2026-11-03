@@ -1,0 +1,75 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,props,targets,csproj,slnx,xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Namespaces e usings
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+
+# Chaves obrigatórias em if/else/for/foreach/while (CLAUDE.md)
+csharp_prefer_braces = true:error
+dotnet_diagnostic.IDE0011.severity = error
+
+# Nomenclatura (CLAUDE.md)
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.prefixo_i.required_prefix = I
+dotnet_naming_style.prefixo_i.capitalization = pascal_case
+dotnet_naming_rule.interfaces_com_prefixo_i.symbols = interfaces
+dotnet_naming_rule.interfaces_com_prefixo_i.style = prefixo_i
+dotnet_naming_rule.interfaces_com_prefixo_i.severity = error
+
+dotnet_naming_symbols.tipos.applicable_kinds = class, struct, enum, delegate
+dotnet_naming_style.pascal.capitalization = pascal_case
+dotnet_naming_rule.tipos_em_pascal.symbols = tipos
+dotnet_naming_rule.tipos_em_pascal.style = pascal
+dotnet_naming_rule.tipos_em_pascal.severity = error
+
+dotnet_naming_symbols.constantes.applicable_kinds = field, local
+dotnet_naming_symbols.constantes.required_modifiers = const
+dotnet_naming_rule.constantes_em_pascal.symbols = constantes
+dotnet_naming_rule.constantes_em_pascal.style = pascal
+dotnet_naming_rule.constantes_em_pascal.severity = error
+
+dotnet_naming_symbols.campos_privados.applicable_kinds = field
+dotnet_naming_symbols.campos_privados.applicable_accessibilities = private, private_protected
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_rule.campos_privados_com_underscore.symbols = campos_privados
+dotnet_naming_rule.campos_privados_com_underscore.style = underscore_camel
+dotnet_naming_rule.campos_privados_com_underscore.severity = error
+
+dotnet_naming_symbols.membros_publicos.applicable_kinds = property, method, event
+dotnet_naming_rule.membros_em_pascal.symbols = membros_publicos
+dotnet_naming_rule.membros_em_pascal.style = pascal
+dotnet_naming_rule.membros_em_pascal.severity = error
+
+dotnet_naming_symbols.metodos_async.applicable_kinds = method
+dotnet_naming_symbols.metodos_async.required_modifiers = async
+dotnet_naming_style.sufixo_async.required_suffix = Async
+dotnet_naming_style.sufixo_async.capitalization = pascal_case
+dotnet_naming_rule.metodos_async_com_sufixo.symbols = metodos_async
+dotnet_naming_rule.metodos_async_com_sufixo.style = sufixo_async
+dotnet_naming_rule.metodos_async_com_sufixo.severity = error
+
+dotnet_naming_symbols.parametros_e_locais.applicable_kinds = parameter, local
+dotnet_naming_style.camel.capitalization = camel_case
+dotnet_naming_rule.parametros_em_camel.symbols = parametros_e_locais
+dotnet_naming_rule.parametros_em_camel.style = camel
+dotnet_naming_rule.parametros_em_camel.severity = error
+
+# Migrations geradas pelo EF não seguem as regras de estilo
+[**/Migrations/**.cs]
+generated_code = true

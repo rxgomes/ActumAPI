@@ -1,0 +1,22 @@
+# Alternativa ao PostgreSQL instalado na máquina, para quem usa Docker.
+# Credenciais apenas para desenvolvimento.
+services:
+  postgres:
+    image: postgres:18
+    container_name: actum-postgres
+    environment:
+      POSTGRES_DB: actum
+      POSTGRES_USER: actum
+      POSTGRES_PASSWORD: actum
+    ports:
+      - "5432:5432"
+    volumes:
+      - actum-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U actum -d actum"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  actum-postgres-data:

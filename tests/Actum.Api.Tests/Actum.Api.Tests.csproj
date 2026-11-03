@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Actum.Api\Actum.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Actum.Modules.Asana.Tests\HttpMessageHandlerFalso.cs" Link="Asana\HttpMessageHandlerFalso.cs" />
+  </ItemGroup>
+
+</Project>
