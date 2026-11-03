@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Actum.Shared.Abstractions\Actum.Shared.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Actum.Modules.Claude.Tests" />
+    <InternalsVisibleTo Include="Actum.Api.Tests" />
+  </ItemGroup>
+
+</Project>

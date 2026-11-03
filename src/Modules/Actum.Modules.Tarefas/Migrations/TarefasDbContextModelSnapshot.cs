@@ -24,6 +24,155 @@ namespace Actum.Modules.Tarefas.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Analise", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("AnalisadaEm")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("analisada_em");
+
+                    b.Property<DateTime>("CreateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("create_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.Property<Guid>("Identifier")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identifier")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Modelo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("modelo");
+
+                    b.Property<string>("Objetivo")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("objetivo");
+
+                    b.Property<long>("TarefaId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tarefa_id");
+
+                    b.Property<int>("TokensEntrada")
+                        .HasColumnType("integer")
+                        .HasColumnName("tokens_entrada");
+
+                    b.Property<int>("TokensSaida")
+                        .HasColumnType("integer")
+                        .HasColumnName("tokens_saida");
+
+                    b.Property<DateTime>("UpdateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("update_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.Property<short>("Versao")
+                        .HasColumnType("smallint")
+                        .HasColumnName("versao");
+
+                    b.HasKey("Id")
+                        .HasName("pk_analise");
+
+                    b.HasIndex("Identifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_analise_identifier");
+
+                    b.HasIndex("TarefaId", "Versao")
+                        .IsUnique()
+                        .HasDatabaseName("ix_analise_tarefa_id_versao");
+
+                    b.ToTable("analise", "tarefas");
+                });
+
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.AnaliseItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AnaliseId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("analise_id");
+
+                    b.Property<DateTime?>("ConcluidoEm")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("concluido_em");
+
+                    b.Property<DateTime>("CreateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("create_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.Property<string>("Grupo")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("grupo");
+
+                    b.Property<Guid>("Identifier")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identifier")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<short>("Ordem")
+                        .HasColumnType("smallint")
+                        .HasColumnName("ordem");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("texto");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tipo");
+
+                    b.Property<DateTime>("UpdateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("update_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.Property<string>("Vago")
+                        .HasColumnType("text")
+                        .HasColumnName("vago");
+
+                    b.HasKey("Id")
+                        .HasName("pk_analise_item");
+
+                    b.HasIndex("Identifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_analise_item_identifier");
+
+                    b.HasIndex("AnaliseId", "Tipo", "Ordem")
+                        .IsUnique()
+                        .HasDatabaseName("ix_analise_item_analise_id_tipo_ordem");
+
+                    b.ToTable("analise_item", "tarefas");
+                });
+
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Comentario", b =>
                 {
                     b.Property<long>("Id")
@@ -535,6 +684,26 @@ namespace Actum.Modules.Tarefas.Migrations
                     b.ToTable("tarefa_branch", "tarefas");
                 });
 
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Analise", b =>
+                {
+                    b.HasOne("Actum.Modules.Tarefas.Domain.Tarefa", null)
+                        .WithMany()
+                        .HasForeignKey("TarefaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_analise_tarefa_tarefa_id");
+                });
+
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.AnaliseItem", b =>
+                {
+                    b.HasOne("Actum.Modules.Tarefas.Domain.Analise", null)
+                        .WithMany("Itens")
+                        .HasForeignKey("AnaliseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_analise_item_analise_analise_id");
+                });
+
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Comentario", b =>
                 {
                     b.HasOne("Actum.Modules.Tarefas.Domain.Tarefa", null)
@@ -579,6 +748,11 @@ namespace Actum.Modules.Tarefas.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_tarefa_branch_tarefa_tarefa_id");
+                });
+
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Analise", b =>
+                {
+                    b.Navigation("Itens");
                 });
 
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Tarefa", b =>

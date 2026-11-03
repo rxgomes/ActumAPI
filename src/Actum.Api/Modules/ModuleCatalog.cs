@@ -1,4 +1,5 @@
 using Actum.Modules.Asana;
+using Actum.Modules.Claude;
 using Actum.Modules.Tarefas;
 using Actum.Shared.Abstractions;
 
@@ -13,6 +14,7 @@ internal static class ModuleCatalog
     public static readonly IReadOnlyList<IModule> All =
     [
         new AsanaModule(),
+        new ClaudeModule(),
         new TarefasModule(),
     ];
 }

@@ -135,3 +135,40 @@ internal sealed class TarefaBranchConfiguration : IEntityTypeConfiguration<Taref
         builder.Ignore(branch => branch.Enviada);
     }
 }
+
+/// <summary>
+/// Mapping of <see cref="Analise"/> to the <c>analise</c> table
+/// </summary>
+internal sealed class AnaliseConfiguration : IEntityTypeConfiguration<Analise>
+{
+    public void Configure(EntityTypeBuilder<Analise> builder)
+    {
+        builder.HasIndex(analise => new { analise.TarefaId, analise.Versao }).IsUnique();
+        builder.Property(analise => analise.Modelo).HasMaxLength(Analise.ModeloMaxLength);
+
+        builder.HasOne<Tarefa>()
+            .WithMany()
+            .HasForeignKey(analise => analise.TarefaId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(analise => analise.Itens)
+            .WithOne()
+            .HasForeignKey(item => item.AnaliseId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+/// <summary>
+/// Mapping of <see cref="AnaliseItem"/> to the <c>analise_item</c> table
+/// </summary>
+internal sealed class AnaliseItemConfiguration : IEntityTypeConfiguration<AnaliseItem>
+{
+    public void Configure(EntityTypeBuilder<AnaliseItem> builder)
+    {
+        builder.Property(item => item.Tipo)
+            .HasConversion(new EnumSnakeCaseConverter<TipoItemAnalise>())
+            .HasMaxLength(AnaliseItem.TipoMaxLength);
+        builder.Property(item => item.Grupo).HasMaxLength(AnaliseItem.GrupoMaxLength);
+        builder.HasIndex(item => new { item.AnaliseId, item.Tipo, item.Ordem }).IsUnique();
+    }
+}

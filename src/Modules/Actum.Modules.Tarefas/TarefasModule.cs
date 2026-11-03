@@ -28,12 +28,16 @@ public sealed class TarefasModule : IModule
         services.AddScoped<ITarefaService, TarefaService>();
         services.AddScoped<IConclusaoService, ConclusaoService>();
         services.AddScoped<IPainelService, PainelService>();
+        services.AddScoped<IAnaliseService, AnaliseService>();
 
         // Data de "hoje" do painel; os testes substituem por um relógio fixo.
         services.TryAddSingleton(TimeProvider.System);
 
         // Uma sincronização por vez no processo; a segunda chamada simultânea recebe 409.
         services.AddSingleton<SincronizacaoEmAndamento>();
+
+        // Uma análise por tarefa por vez; a segunda chamada simultânea recebe 409.
+        services.AddSingleton<AnalisesEmAndamento>();
 
         // Validação dos DTOs desta compilação (gerada por compilação).
         services.AddValidation();
@@ -46,5 +50,6 @@ public sealed class TarefasModule : IModule
         endpoints.MapEmpresaEndpoints();
         endpoints.MapPainelEndpoints();
         endpoints.MapTarefaEndpoints();
+        endpoints.MapAnaliseEndpoints();
     }
 }

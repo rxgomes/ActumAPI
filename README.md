@@ -77,6 +77,25 @@ Os user-secrets são carregados apenas em `Development`. O token nunca deve ser 
 
 Quando um endpoint depende do Asana, as falhas viram Problem Details: token ausente ou recusado gera `400`, e Asana fora do ar, tempo esgotado ou limite de requisições esgotado (após 3 novas tentativas em `429`) gera `502`.
 
+## Configurar a Claude API (análise com IA)
+
+A análise da demanda (`POST /tarefas/{identifier}/analises`) usa a Claude API da Anthropic. Crie uma chave no Console da Anthropic (<https://platform.claude.com>, em **API keys**) e guarde-a em `dotnet user-secrets`, na chave `Claude:ApiKey`:
+
+```bash
+dotnet user-secrets set "Claude:ApiKey" "<sua-chave>" --project src/Actum.Api
+```
+
+Confira com `GET /claude/situacao` (`"configurado": true`). A chave nunca é versionada, registrada em log nem devolvida pela API.
+
+| Configuração | Padrão | Uso |
+|---|---|---|
+| `Claude:Modelo` | `claude-opus-5-5` | Modelo das análises (ex.: `claude-sonnet-5-5` para baratear). |
+| `Claude:Esforco` | `medium` | Profundidade do raciocínio: `low`, `medium`, `high` ou `max`. |
+| `Claude:MaxTokens` | `16000` | Limite de tokens da resposta. |
+| `Claude:NovasTentativas` | `2` | Novas tentativas do SDK em `429`, `529` e `5xx`. |
+
+Cada análise é uma chamada paga e envia à Anthropic o conteúdo da tarefa (título, descrição, projetos, comentários e retrabalhos); ela só acontece quando o usuário pede. Se o modelo recusar por política, a Anthropic refaz a chamada com o modelo de fallback recomendado (`fallbacks: "default"`), e o modelo gravado na análise é o que respondeu. Chave ausente ou recusada, conta sem créditos e recusa do modelo geram `400`; Anthropic fora do ar, limite de uso e resposta incompleta geram `502`.
+
 ## Executar a API
 
 ```bash
