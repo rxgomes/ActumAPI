@@ -1,5 +1,6 @@
 using Actum.Modules.Tarefas.Application;
 using Actum.Modules.Tarefas.Endpoints;
+using Actum.Modules.Tarefas.Errors;
 using Actum.Modules.Tarefas.Persistence;
 using Actum.Shared.Abstractions;
 using Actum.Shared.Infrastructure.Persistence;
@@ -29,6 +30,7 @@ public sealed class TarefasModule : IModule
         services.AddScoped<IConclusaoService, ConclusaoService>();
         services.AddScoped<IPainelService, PainelService>();
         services.AddScoped<IAnaliseService, AnaliseService>();
+        services.AddScoped<IComentarioService, ComentarioService>();
 
         // Data de "hoje" do painel; os testes substituem por um relógio fixo.
         services.TryAddSingleton(TimeProvider.System);
@@ -40,6 +42,9 @@ public sealed class TarefasModule : IModule
         services.AddSingleton<AnalisesEmAndamento>();
 
         // Validação dos DTOs desta compilação (gerada por compilação).
+        // Falha no meio do envio ao Asana: Problem Details com os anexos já enviados.
+        services.AddExceptionHandler<EnvioParcialExceptionHandler>();
+
         services.AddValidation();
     }
 
@@ -51,5 +56,6 @@ public sealed class TarefasModule : IModule
         endpoints.MapPainelEndpoints();
         endpoints.MapTarefaEndpoints();
         endpoints.MapAnaliseEndpoints();
+        endpoints.MapComentarioEndpoints();
     }
 }

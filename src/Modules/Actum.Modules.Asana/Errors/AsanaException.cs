@@ -35,3 +35,11 @@ public sealed class AsanaAcessoNegadoException()
 /// <param name="innerException">Original failure, if any</param>
 public sealed class AsanaIndisponivelException(Exception? innerException = null)
     : AsanaException("Não foi possível comunicar com o Asana. Tente novamente em instantes.", innerException);
+
+/// <summary>
+/// The Asana rejected a write (comment or attachment) with <c>400</c>, <c>404</c>, <c>413</c> or <c>422</c>;
+/// retrying the same request does not help
+/// </summary>
+/// <param name="message">Failure description, in pt-BR</param>
+public sealed class AsanaRequisicaoRecusadaException(string message)
+    : AsanaException(message);

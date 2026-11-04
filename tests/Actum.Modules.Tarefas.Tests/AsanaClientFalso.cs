@@ -150,6 +150,61 @@ public sealed class AsanaClientFalso : IAsanaClient
     /// <summary>
     /// Tags de cada workspace
     /// </summary>
+    /// <summary>
+    /// Seguidores por tarefa; tarefa ausente responde como excluída no Asana (<see langword="null"/>)
+    /// </summary>
+    public Dictionary<string, List<AsanaUsuarioResumo>> Participantes { get; } = [];
+
+    /// <summary>
+    /// Comentários publicados: tarefa, texto e menções
+    /// </summary>
+    public List<(string Tarefa, string Texto, IReadOnlyList<string> Mencoes)> Comentarios { get; } = [];
+
+    /// <summary>
+    /// Anexos enviados: tarefa, nome, tipo e conteúdo
+    /// </summary>
+    public List<(string Tarefa, string Nome, string Tipo, byte[] Conteudo)> Anexos { get; } = [];
+
+    public Task<IReadOnlyList<AsanaUsuarioResumo>?> ListarParticipantesAsync(string tarefaGid, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<AsanaUsuarioResumo>? participantes = Participantes.TryGetValue(tarefaGid, out var lista) ? [.. lista] : null;
+        return Task.FromResult(participantes);
+    }
+
+    public async Task<AsanaAnexo> AnexarArquivoAsync(string tarefaGid, string nome, string tipo, Stream conteudo, CancellationToken cancellationToken)
+    {
+        using var memoria = new MemoryStream();
+        await conteudo.CopyToAsync(memoria, cancellationToken);
+
+        lock (_trava)
+        {
+            RegistrarEscrita($"anexo:{nome}");
+            Anexos.Add((tarefaGid, nome, tipo, memoria.ToArray()));
+            return new AsanaAnexo($"anexo-{Anexos.Count}", nome);
+        }
+    }
+
+    public Task<AsanaStory> ComentarAsync(string tarefaGid, string texto, IReadOnlyList<string> mencoes, CancellationToken cancellationToken)
+    {
+        lock (_trava)
+        {
+            RegistrarEscrita("comentar");
+            Comentarios.Add((tarefaGid, texto, mencoes));
+
+            var story = new AsanaStory($"story-{Guid.NewGuid():N}", AsanaStoryTipo.Comentario, new DateTime(2026, 11, 3, 18, 15, 0), Usuario.Nome, texto);
+            if (Stories.TryGetValue(tarefaGid, out var stories))
+            {
+                stories.Add(story);
+            }
+            else
+            {
+                Stories[tarefaGid] = [story];
+            }
+
+            return Task.FromResult(story);
+        }
+    }
+
     public Dictionary<string, List<AsanaTag>> TagsPorWorkspace { get; } = [];
 
     /// <summary>
