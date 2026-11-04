@@ -31,6 +31,8 @@ public sealed class Tarefa : Entity
 
     private readonly List<TarefaBranch> _branches = [];
 
+    private readonly List<Conclusao> _conclusoes = [];
+
     private Tarefa()
     {
     }
@@ -141,6 +143,11 @@ public sealed class Tarefa : Entity
     public IReadOnlyCollection<TarefaBranch> Branches => _branches;
 
     /// <summary>
+    /// Completions found in the Asana history
+    /// </summary>
+    public IReadOnlyCollection<Conclusao> Conclusoes => _conclusoes;
+
+    /// <summary>
     /// Branches whose tags are not yet in the Asana, in the order they are sent: base, implementation, then creation
     /// </summary>
     public IReadOnlyList<TarefaBranch> BranchesPendentes => _branches
@@ -220,54 +227,90 @@ public sealed class Tarefa : Entity
     }
 
     /// <summary>
-    /// Register one rework for each reopening (<see cref="AsanaStoryTipo.MarcadaIncompleta"/>) in the history after
-    /// <paramref name="referencia"/> not yet registered, numbered in chronological order. When none is found and
-    /// <paramref name="registrarSemHistorico"/> is set, register one rework at <paramref name="agora"/> without author.
-    /// If any rework is registered, the task goes to <see cref="StatusTarefa.Retrabalho"/> with the internal due
-    /// date pending, and the internal due date in force is kept in the rework.
+    /// Recalculate the completions and reworks from the Asana history: each reopening preceded by a completion is a
+    /// rework, numbered by reopening date. Reworks already recorded for the same reopening are kept (with the due
+    /// dates and the resolution recorded by the Actum); recorded reworks without a pair are removed and their
+    /// branches lose only the link. Only a new pair reopened after the completion the Actum knows (completed task, or
+    /// archived because it was completed in the Asana) puts the task in <see cref="StatusTarefa.Retrabalho"/> with
+    /// the internal due date pending; older pairs are history. A completed task back in the open list without such a
+    /// pair goes back to <see cref="StatusTarefa.EmAndamento"/> with the internal due date pending.
     /// </summary>
     /// <param name="stories">Task history in the Asana</param>
-    /// <param name="referencia">Last completion (or archiving) of the task; only later reopenings count</param>
-    /// <param name="registrarSemHistorico">Whether to register a rework when the history has no reopening</param>
-    /// <param name="agora">Local date and time of the synchronization</param>
-    /// <returns>Reworks registered</returns>
-    public IReadOnlyList<Retrabalho> RegistrarReaberturas(
-        IEnumerable<AsanaStory> stories,
-        DateTime? referencia,
-        bool registrarSemHistorico,
-        DateTime agora)
+    /// <param name="voltouParaALista">Whether the task is back in the open list of the user</param>
+    /// <returns>New reworks that reopened the task (the history-only ones are not counted)</returns>
+    public int RecalcularRetrabalhos(IEnumerable<AsanaStory> stories, bool voltouParaALista)
     {
-        var reaberturas = stories
-            .Where(story => story.Tipo == AsanaStoryTipo.MarcadaIncompleta)
-            .Where(story => referencia is null || story.CriadaEm > referencia)
-            .Where(story => _retrabalhos.All(retrabalho => retrabalho.AsanaStoryGid != story.Gid))
-            .OrderBy(story => story.CriadaEm)
-            .Select(story => (story.CriadaEm, story.AutorNome, (string?)story.Gid))
-            .ToList();
+        var historico = HistoricoDeConclusoes.Calcular(stories);
 
-        if (reaberturas.Count == 0 && registrarSemHistorico)
+        foreach (var conclusao in historico.Conclusoes.Where(conclusao => _conclusoes.All(existente => existente.AsanaStoryGid != conclusao.StoryGid)))
         {
-            reaberturas.Add((agora, null, null));
+            _conclusoes.Add(new Conclusao(conclusao.StoryGid, conclusao.Em, conclusao.Por));
         }
 
-        var registrados = new List<Retrabalho>();
-        foreach (var (reabertaEm, reabertaPor, storyGid) in reaberturas)
+        DateTime? referencia = Status switch
         {
-            var numero = (short)(_retrabalhos.Count == 0 ? 1 : _retrabalhos.Max(retrabalho => retrabalho.Numero) + 1);
-            var retrabalho = new Retrabalho(numero, reabertaEm, reabertaPor, storyGid, PrazoInterno);
-            _retrabalhos.Add(retrabalho);
-            registrados.Add(retrabalho);
+            StatusTarefa.Concluida => ConcluidaEm,
+            StatusTarefa.Arquivada when MotivoArquivamento == Domain.MotivoArquivamento.ConcluidaNoAsana => ArquivadaEm,
+            _ => null,
+        };
+
+        var mantidos = new List<Retrabalho>();
+        var reabriram = 0;
+        foreach (var par in historico.Pares)
+        {
+            var existente = _retrabalhos.FirstOrDefault(retrabalho => retrabalho.AsanaStoryGid == par.ReaberturaGid);
+            if (existente is not null)
+            {
+                mantidos.Add(existente);
+                continue;
+            }
+
+            var reabriu = referencia is not null && par.ReabertaEm > referencia;
+            var novo = new Retrabalho(0, par.ReabertaEm, par.ReabertaPor, par.ReaberturaGid, reabriu ? PrazoInterno : null, par.ConcluidaEm)
+            {
+                ResolvidoEm = par.ResolvidoEm,
+            };
+            _retrabalhos.Add(novo);
+            mantidos.Add(novo);
+
+            if (reabriu)
+            {
+                reabriram++;
+            }
         }
 
-        if (registrados.Count > 0)
+        foreach (var semPar in _retrabalhos.Except(mantidos).ToList())
+        {
+            foreach (var branch in _branches.Where(branch => branch.RetrabalhoId is not null && branch.RetrabalhoId == semPar.Id))
+            {
+                branch.DesvincularRetrabalho();
+            }
+
+            _retrabalhos.Remove(semPar);
+        }
+
+        // Numeração pela data da reabertura, com os pares na mesma ordem do histórico.
+        for (var indice = 0; indice < historico.Pares.Count; indice++)
+        {
+            var par = historico.Pares[indice];
+            _retrabalhos.Single(retrabalho => retrabalho.AsanaStoryGid == par.ReaberturaGid).AtualizarDoHistorico((short)(indice + 1), par);
+        }
+
+        if (reabriram > 0)
         {
             Status = StatusTarefa.Retrabalho;
             StatusAnterior = null;
             PrazoInternoPendente = true;
             LimparArquivamento();
         }
+        else if (voltouParaALista && Status == StatusTarefa.Concluida)
+        {
+            Status = StatusTarefa.EmAndamento;
+            StatusAnterior = null;
+            PrazoInternoPendente = true;
+        }
 
-        return registrados;
+        return reabriram;
     }
 
     /// <summary>

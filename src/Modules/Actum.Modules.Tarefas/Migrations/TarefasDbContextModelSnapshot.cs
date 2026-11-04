@@ -173,6 +173,61 @@ namespace Actum.Modules.Tarefas.Migrations
                     b.ToTable("analise_item", "tarefas");
                 });
 
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Anotacao", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("AlteradaEm")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("alterada_em");
+
+                    b.Property<DateTime>("CreateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("create_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.Property<Guid>("Identifier")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identifier")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<long>("TarefaId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tarefa_id");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("texto");
+
+                    b.Property<DateTime>("UpdateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("update_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.HasKey("Id")
+                        .HasName("pk_anotacao");
+
+                    b.HasIndex("Identifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_anotacao_identifier");
+
+                    b.HasIndex("TarefaId")
+                        .HasDatabaseName("ix_anotacao_tarefa_id");
+
+                    b.ToTable("anotacao", "tarefas");
+                });
+
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Comentario", b =>
                 {
                     b.Property<long>("Id")
@@ -245,6 +300,71 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasDatabaseName("ix_comentario_tarefa_id");
 
                     b.ToTable("comentario", "tarefas");
+                });
+
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Conclusao", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AsanaStoryGid")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("asana_story_gid");
+
+                    b.Property<DateTime>("ConcluidaEm")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("concluida_em");
+
+                    b.Property<string>("ConcluidaPor")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("concluida_por");
+
+                    b.Property<DateTime>("CreateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("create_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.Property<Guid>("Identifier")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identifier")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<long>("TarefaId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tarefa_id");
+
+                    b.Property<DateTime>("UpdateIn")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("update_in")
+                        .HasDefaultValueSql("localtimestamp");
+
+                    b.HasKey("Id")
+                        .HasName("pk_conclusao");
+
+                    b.HasIndex("AsanaStoryGid")
+                        .IsUnique()
+                        .HasDatabaseName("ix_conclusao_asana_story_gid");
+
+                    b.HasIndex("Identifier")
+                        .IsUnique()
+                        .HasDatabaseName("ix_conclusao_identifier");
+
+                    b.HasIndex("TarefaId", "ConcluidaEm")
+                        .HasDatabaseName("ix_conclusao_tarefa_id_concluida_em");
+
+                    b.ToTable("conclusao", "tarefas");
                 });
 
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Empresa", b =>
@@ -331,6 +451,10 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("asana_story_gid");
 
+                    b.Property<DateTime?>("ConcluidaEm")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("concluida_em");
+
                     b.Property<DateTime>("CreateIn")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("create_in")
@@ -392,8 +516,10 @@ namespace Actum.Modules.Tarefas.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_retrabalho_identifier");
 
+                    b.HasIndex("ReabertaEm")
+                        .HasDatabaseName("ix_retrabalho_reaberta_em");
+
                     b.HasIndex("TarefaId", "Numero")
-                        .IsUnique()
                         .HasDatabaseName("ix_retrabalho_tarefa_id_numero");
 
                     b.ToTable("retrabalho", "tarefas");
@@ -454,6 +580,13 @@ namespace Actum.Modules.Tarefas.Migrations
                     b.Property<int>("TarefasNovas")
                         .HasColumnType("integer")
                         .HasColumnName("tarefas_novas");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("sincronizacao")
+                        .HasColumnName("tipo");
 
                     b.Property<DateTime>("UpdateIn")
                         .HasColumnType("timestamp without time zone")
@@ -704,6 +837,16 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasConstraintName("fk_analise_item_analise_analise_id");
                 });
 
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Anotacao", b =>
+                {
+                    b.HasOne("Actum.Modules.Tarefas.Domain.Tarefa", null)
+                        .WithMany()
+                        .HasForeignKey("TarefaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_anotacao_tarefa_tarefa_id");
+                });
+
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Comentario", b =>
                 {
                     b.HasOne("Actum.Modules.Tarefas.Domain.Tarefa", null)
@@ -712,6 +855,16 @@ namespace Actum.Modules.Tarefas.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_comentario_tarefa_tarefa_id");
+                });
+
+            modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Conclusao", b =>
+                {
+                    b.HasOne("Actum.Modules.Tarefas.Domain.Tarefa", null)
+                        .WithMany("Conclusoes")
+                        .HasForeignKey("TarefaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_conclusao_tarefa_tarefa_id");
                 });
 
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.Retrabalho", b =>
@@ -760,6 +913,8 @@ namespace Actum.Modules.Tarefas.Migrations
                     b.Navigation("Branches");
 
                     b.Navigation("Comentarios");
+
+                    b.Navigation("Conclusoes");
 
                     b.Navigation("Retrabalhos");
                 });

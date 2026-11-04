@@ -41,6 +41,14 @@ public sealed class TarefaBranch : Entity
     public long? RetrabalhoId { get; private set; }
 
     /// <summary>
+    /// Remove the link with a rework that no longer exists (the branch itself is kept)
+    /// </summary>
+    internal void DesvincularRetrabalho()
+    {
+        RetrabalhoId = null;
+    }
+
+    /// <summary>
     /// Identifier of the Asana tag, filled when sent
     /// </summary>
     public string? AsanaTagGid { get; private set; }

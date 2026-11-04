@@ -69,18 +69,19 @@ public sealed class RetrabalhoTests(PostgresFixture postgres) : SincronizacaoTes
     }
 
     [Fact]
-    public async Task VariasReaberturasDesdeAConclusaoSaoNumeradasEmOrdemCronologicaAsync()
+    public async Task ReaberturasSeguidasSemNovaConclusaoContamUmaVezAsync()
     {
         await PrepararTarefaConcluidaAsync();
 
+        // Fora de ordem de propósito: o par é a primeira reabertura depois da conclusão.
         Reabrir(
             modificadaEm: PrimeiraConclusao.AddHours(9),
             Reabertura("r-tarde", "João", PrimeiraConclusao.AddHours(8)),
             Reabertura("r-cedo", "Maria", PrimeiraConclusao.AddHours(2)));
         await SincronizarAsync();
 
-        var retrabalhos = (await LerTarefaAsync(Nome))!.Retrabalhos.OrderBy(r => r.Numero).ToList();
-        Assert.Equal(["Maria", "João"], retrabalhos.Select(r => r.ReabertaPor));
+        var retrabalho = Assert.Single((await LerTarefaAsync(Nome))!.Retrabalhos);
+        Assert.Equal(("Maria", Gid("r-cedo"), (DateTime?)PrimeiraConclusao), (retrabalho.ReabertaPor, retrabalho.AsanaStoryGid, retrabalho.ConcluidaEm));
     }
 
     [Fact]
@@ -103,22 +104,19 @@ public sealed class RetrabalhoTests(PostgresFixture postgres) : SincronizacaoTes
     }
 
     [Fact]
-    public async Task ReaberturaSemRegistroNoHistoricoUsaADataDaSincronizacaoAsync()
+    public async Task ReaberturaSemRegistroNoHistoricoVoltaParaEmAndamentoSemRetrabalhoAsync()
     {
-        await PrepararTarefaConcluidaAsync();
+        await PrepararTarefaConcluidaAsync(prazoInterno: new DateOnly(2026, 10, 20));
 
-        // Só reaberturas anteriores à conclusão: não contam.
+        // Só uma reabertura anterior à conclusão, sem conclusão antes dela: não é par.
         Reabrir(modificadaEm: PrimeiraConclusao.AddHours(5), Reabertura("r-antiga", "Maria", PrimeiraConclusao.AddHours(-1)));
-        var antes = DateTime.Now;
-        await SincronizarAsync();
-        var depois = DateTime.Now;
+        var resultado = await SincronizarAsync();
 
         var tarefa = await LerTarefaAsync(Nome);
-        var retrabalho = Assert.Single(tarefa!.Retrabalhos);
-        Assert.InRange(retrabalho.ReabertaEm, antes.AddMilliseconds(-1), depois);
-        Assert.Null(retrabalho.ReabertaPor);
-        Assert.Null(retrabalho.AsanaStoryGid);
-        Assert.Equal(StatusTarefa.Retrabalho, tarefa.Status);
+        Assert.Empty(tarefa!.Retrabalhos);
+        Assert.Equal(StatusTarefa.EmAndamento, tarefa.Status);
+        Assert.True(tarefa.PrazoInternoPendente);
+        Assert.Equal(0, resultado.Sincronizacao!.Reaberturas);
     }
 
     [Fact]
@@ -128,6 +126,7 @@ public sealed class RetrabalhoTests(PostgresFixture postgres) : SincronizacaoTes
         await SincronizarAsync();
         Abertas();
         Asana.Tarefas[Gid(Nome)] = TarefaAsana(Nome, concluida: true);
+        ConcluiuNoAsana(Nome, Base.AddDays(1), "Maria");
         await SincronizarAsync();
         var arquivada = await LerTarefaAsync(Nome);
         Assert.Equal(MotivoArquivamento.ConcluidaNoAsana, arquivada!.MotivoArquivamento);
@@ -176,6 +175,7 @@ public sealed class RetrabalhoTests(PostgresFixture postgres) : SincronizacaoTes
     private async Task ConcluirNoActumAsync(DateTime concluidaEm)
     {
         await AlterarTarefaAsync(Nome, status: StatusTarefa.Concluida, concluidaEm: concluidaEm);
+        ConcluiuNoAsana(Nome, concluidaEm);
         Abertas();
         Asana.Tarefas[Gid(Nome)] = TarefaAsana(Nome, concluida: true, modificadaEm: concluidaEm);
         await SincronizarAsync();

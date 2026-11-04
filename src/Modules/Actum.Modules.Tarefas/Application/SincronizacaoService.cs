@@ -41,6 +41,7 @@ internal sealed class SincronizacaoService(
     {
         var ultima = await context.Set<Sincronizacao>()
             .AsNoTracking()
+            .Where(sincronizacao => sincronizacao.Tipo == TipoSincronizacao.Sincronizacao)
             .OrderByDescending(sincronizacao => sincronizacao.IniciadaEm)
             .ThenByDescending(sincronizacao => sincronizacao.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -132,6 +133,8 @@ internal sealed class SincronizacaoService(
             .Where(tarefa => tarefa.EmpresaId == empresa.Id)
             .Include(tarefa => tarefa.Comentarios)
             .Include(tarefa => tarefa.Retrabalhos)
+            .Include(tarefa => tarefa.Conclusoes)
+            .Include(tarefa => tarefa.Branches)
             .AsSplitQuery()
             .ToDictionaryAsync(tarefa => tarefa.AsanaGid, cancellationToken);
 
@@ -193,6 +196,9 @@ internal sealed class SincronizacaoService(
         var stories = await asana.ListarStoriesAsync(remota.Gid, cancellationToken);
         tarefa.AdicionarComentarios(stories, lidos: true);
 
+        // Conclusões e reaberturas anteriores ao Actum entram como histórico (a tarefa continua na entrada).
+        tarefa.RecalcularRetrabalhos(stories, voltouParaALista: false);
+
         context.Add(tarefa);
     }
 
@@ -217,21 +223,13 @@ internal sealed class SincronizacaoService(
         var stories = await asana.ListarStoriesAsync(remota.Gid, cancellationToken);
         local.AdicionarComentarios(stories, lidos: false);
 
-        if (statusAntes == StatusTarefa.Concluida)
-        {
-            totais.Reaberturas += local.RegistrarReaberturas(stories, local.ConcluidaEm, registrarSemHistorico: true, agora).Count;
-        }
-        else if (statusAntes == StatusTarefa.Arquivada)
-        {
-            if (local.MotivoArquivamento == MotivoArquivamento.ConcluidaNoAsana)
-            {
-                totais.Reaberturas += local.RegistrarReaberturas(stories, local.ArquivadaEm, registrarSemHistorico: false, agora).Count;
-            }
+        // Retrabalho = par concluiu → marcou como não concluída no histórico; só pares novos após a conclusão
+        // conhecida reabrem a tarefa, os demais são histórico.
+        totais.Reaberturas += local.RecalcularRetrabalhos(stories, voltouParaALista);
 
-            if (local.Status == StatusTarefa.Arquivada)
-            {
-                local.Desarquivar();
-            }
+        if (statusAntes == StatusTarefa.Arquivada && local.Status == StatusTarefa.Arquivada)
+        {
+            local.Desarquivar();
         }
 
         totais.Atualizadas++;

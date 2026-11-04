@@ -101,6 +101,11 @@ public sealed class AsanaClientFalso : IAsanaClient
             StoriesConsultadas.Add(tarefaGid);
         }
 
+        if (tarefaGid == FalharStories)
+        {
+            throw new Actum.Modules.Asana.Errors.AsanaIndisponivelException();
+        }
+
         IReadOnlyList<AsanaStory> stories = Stories.TryGetValue(tarefaGid, out var lista) ? [.. lista] : [];
         return Task.FromResult(stories);
     }
@@ -143,6 +148,10 @@ public sealed class AsanaClientFalso : IAsanaClient
             RegistrarEscrita("concluir");
 
             Tarefas[tarefaGid] = Tarefas[tarefaGid] with { Concluida = true };
+
+            // O Asana registra a conclusão no histórico da tarefa.
+            var conclusao = new AsanaStory($"concluiu-{Guid.NewGuid():N}", AsanaStoryTipo.MarcadaConcluida, DateTime.Now, Usuario.Nome, "concluiu esta tarefa");
+            Stories[tarefaGid] = Stories.TryGetValue(tarefaGid, out var stories) ? [.. stories, conclusao] : [conclusao];
             return Task.CompletedTask;
         }
     }
@@ -204,6 +213,11 @@ public sealed class AsanaClientFalso : IAsanaClient
             return Task.FromResult(story);
         }
     }
+
+    /// <summary>
+    /// Tarefa cujo histórico falha como indisponível
+    /// </summary>
+    public string? FalharStories { get; set; }
 
     public Dictionary<string, List<AsanaTag>> TagsPorWorkspace { get; } = [];
 

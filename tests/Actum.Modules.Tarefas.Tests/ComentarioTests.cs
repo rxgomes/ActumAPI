@@ -222,6 +222,7 @@ public sealed class ComentarioTests(PostgresFixture postgres) : SincronizacaoTes
         await AlterarTarefaAsync(Nome, status: StatusTarefa.Concluida, concluidaEm: conclusao);
         Abertas();
         Asana.Tarefas[Gid(Nome)] = TarefaAsana(Nome, concluida: true, modificadaEm: conclusao);
+        ConcluiuNoAsana(Nome, conclusao);
         await SincronizarAsync();
 
         var reabertaEm = conclusao.AddHours(2);

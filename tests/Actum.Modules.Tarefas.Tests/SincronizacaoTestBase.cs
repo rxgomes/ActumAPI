@@ -115,9 +115,30 @@ public abstract class SincronizacaoTestBase(PostgresFixture postgres) : IAsyncLi
         Abertas(Workspace, tarefas);
     }
 
+    /// <summary>
+    /// Define o histórico da tarefa. As conclusões já registradas no Asana (pelo Actum ou por
+    /// <see cref="ConcluiuNoAsana"/>) continuam no histórico, como no Asana.
+    /// </summary>
     protected void Historico(string nome, params AsanaStory[] stories)
     {
-        Asana.Stories[Gid(nome)] = [.. stories];
+        var conclusoes = Asana.Stories.TryGetValue(Gid(nome), out var atuais)
+            ? atuais.Where(story => story.Tipo == AsanaStoryTipo.MarcadaConcluida && stories.All(nova => nova.Gid != story.Gid)).ToList()
+            : [];
+        Asana.Stories[Gid(nome)] = [.. conclusoes, .. stories];
+    }
+
+    protected AsanaStory Conclusao(string id, string autor, DateTime em)
+    {
+        return new AsanaStory(Gid(id), AsanaStoryTipo.MarcadaConcluida, em, autor, $"{autor} concluiu esta tarefa");
+    }
+
+    /// <summary>
+    /// Registra no histórico do Asana que a tarefa foi concluída em <paramref name="em"/>
+    /// </summary>
+    protected void ConcluiuNoAsana(string nome, DateTime em, string autor = "Ricardo")
+    {
+        var story = Conclusao($"concluiu-{nome}-{em:yyyyMMddHHmmss}", autor, em);
+        Asana.Stories[Gid(nome)] = Asana.Stories.TryGetValue(Gid(nome), out var atuais) ? [.. atuais, story] : [story];
     }
 
     protected AsanaStory Comentario(string id, string autor, string texto, DateTime em)

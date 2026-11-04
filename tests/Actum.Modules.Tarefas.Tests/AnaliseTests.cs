@@ -111,6 +111,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         await AlterarTarefaAsync(Nome, status: StatusTarefa.Concluida, concluidaEm: conclusao);
         Abertas();
         Asana.Tarefas[Gid(Nome)] = TarefaAsana(Nome, concluida: true, modificadaEm: conclusao);
+        ConcluiuNoAsana(Nome, conclusao);
         await SincronizarAsync();
         var reabertaEm = conclusao.AddHours(3);
         Abertas(TarefaAsana(Nome, modificadaEm: reabertaEm));

@@ -271,7 +271,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
                     retrabalho.PrazoInternoAnterior,
                     retrabalho.PrazoInternoNovo,
                     retrabalho.ResolvidoEm,
-                    daJanela);
+                    daJanela,
+                    retrabalho.ConcluidaEm);
             })
             .ToList();
     }

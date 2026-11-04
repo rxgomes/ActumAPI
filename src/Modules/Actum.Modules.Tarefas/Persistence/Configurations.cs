@@ -67,6 +67,11 @@ internal sealed class TarefaConfiguration : IEntityTypeConfiguration<Tarefa>
             .HasForeignKey(branch => branch.TarefaId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(tarefa => tarefa.Conclusoes)
+            .WithOne()
+            .HasForeignKey(conclusao => conclusao.TarefaId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // Calculada a partir de Branches; sem isso o EF a mapearia como uma segunda navegação.
         builder.Ignore(tarefa => tarefa.BranchesPendentes);
 
@@ -95,7 +100,9 @@ internal sealed class RetrabalhoConfiguration : IEntityTypeConfiguration<Retraba
 {
     public void Configure(EntityTypeBuilder<Retrabalho> builder)
     {
-        builder.HasIndex(retrabalho => new { retrabalho.TarefaId, retrabalho.Numero }).IsUnique();
+        // Sem unicidade: o recálculo a partir do histórico renumera os retrabalhos na mesma gravação.
+        builder.HasIndex(retrabalho => new { retrabalho.TarefaId, retrabalho.Numero });
+        builder.HasIndex(retrabalho => retrabalho.ReabertaEm);
         builder.Property(retrabalho => retrabalho.AsanaStoryGid).HasMaxLength(Retrabalho.GidMaxLength);
         builder.HasIndex(retrabalho => retrabalho.AsanaStoryGid).IsUnique().HasFilter("asana_story_gid is not null");
         builder.Property(retrabalho => retrabalho.ReabertaPor).HasMaxLength(Retrabalho.ReabertaPorMaxLength);
@@ -110,6 +117,11 @@ internal sealed class SincronizacaoConfiguration : IEntityTypeConfiguration<Sinc
     public void Configure(EntityTypeBuilder<Sincronizacao> builder)
     {
         builder.HasIndex(sincronizacao => sincronizacao.IniciadaEm);
+        builder.Property(sincronizacao => sincronizacao.Tipo)
+            .HasConversion(new EnumSnakeCaseConverter<TipoSincronizacao>())
+            .HasMaxLength(Sincronizacao.TipoMaxLength)
+            .HasDefaultValue(TipoSincronizacao.Sincronizacao)
+            .ValueGeneratedNever();
     }
 }
 
@@ -170,5 +182,33 @@ internal sealed class AnaliseItemConfiguration : IEntityTypeConfiguration<Analis
             .HasMaxLength(AnaliseItem.TipoMaxLength);
         builder.Property(item => item.Grupo).HasMaxLength(AnaliseItem.GrupoMaxLength);
         builder.HasIndex(item => new { item.AnaliseId, item.Tipo, item.Ordem }).IsUnique();
+    }
+}
+
+/// <summary>
+/// Mapping of <see cref="Conclusao"/> to the <c>conclusao</c> table
+/// </summary>
+internal sealed class ConclusaoConfiguration : IEntityTypeConfiguration<Conclusao>
+{
+    public void Configure(EntityTypeBuilder<Conclusao> builder)
+    {
+        builder.Property(conclusao => conclusao.AsanaStoryGid).HasMaxLength(Conclusao.GidMaxLength);
+        builder.HasIndex(conclusao => conclusao.AsanaStoryGid).IsUnique();
+        builder.Property(conclusao => conclusao.ConcluidaPor).HasMaxLength(Conclusao.ConcluidaPorMaxLength);
+        builder.HasIndex(conclusao => new { conclusao.TarefaId, conclusao.ConcluidaEm });
+    }
+}
+
+/// <summary>
+/// Mapping of <see cref="Anotacao"/> to the <c>anotacao</c> table
+/// </summary>
+internal sealed class AnotacaoConfiguration : IEntityTypeConfiguration<Anotacao>
+{
+    public void Configure(EntityTypeBuilder<Anotacao> builder)
+    {
+        builder.HasOne<Tarefa>()
+            .WithMany()
+            .HasForeignKey(anotacao => anotacao.TarefaId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

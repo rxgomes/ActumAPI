@@ -270,8 +270,15 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
         _abertas[gid] = tarefa;
         Publicar();
 
-        var anteriores = Asana.Stories.TryGetValue(gid, out var lista) ? lista.Where(s => s.Tipo == AsanaStoryTipo.MarcadaIncompleta) : [];
-        Asana.Stories[gid] = [.. anteriores, Reabertura($"r-{nome}-{em:yyyyMMddHHmm}", "Maria", em), .. comentarios];
+        // Cada reabertura vem depois de uma conclusão, como no Asana.
+        var anteriores = Asana.Stories.TryGetValue(gid, out var lista) ? lista.Where(s => s.Tipo is AsanaStoryTipo.MarcadaIncompleta or AsanaStoryTipo.MarcadaConcluida) : [];
+        Asana.Stories[gid] =
+        [
+            .. anteriores,
+            Conclusao($"c-{nome}-{em:yyyyMMddHHmm}", "Ricardo", em.AddHours(-1)),
+            Reabertura($"r-{nome}-{em:yyyyMMddHHmm}", "Maria", em),
+            .. comentarios,
+        ];
     }
 
     private void Publicar()

@@ -67,7 +67,7 @@ Na primeira sincronização de cada empresa, as tarefas abertas SHALL ser criada
 - **THEN** as sincronizações seguintes dessa empresa MUST NOT aplicar a regra de carga inicial
 
 ### Requirement: Novas tarefas após a carga inicial
-Depois da carga inicial da empresa, toda tarefa aberta ainda inexistente no Actum SHALL ser criada com status `entrada`, sem prazo interno.
+Depois da carga inicial da empresa, toda tarefa aberta ainda inexistente no Actum SHALL ser criada com status `entrada`, sem prazo interno. Conclusões e reaberturas anteriores à criação MUST ser gravadas como histórico (conclusões e retrabalhos), sem mudar o status `entrada`.
 
 #### Scenario: Tarefa nova atribuída
 - **WHEN** uma tarefa nova é atribuída ao usuário no Asana e a sincronização é executada
@@ -75,7 +75,7 @@ Depois da carga inicial da empresa, toda tarefa aberta ainda inexistente no Actu
 
 #### Scenario: Tarefa concluída antes do Actum e reaberta
 - **WHEN** uma tarefa concluída no Asana antes de existir no Actum é reaberta e a sincronização é executada
-- **THEN** a tarefa MUST ser criada com status `entrada`, sem registro de retrabalho
+- **THEN** a tarefa MUST ser criada com status `entrada` e um retrabalho de histórico para esse par, sem prazo pendente
 
 ### Requirement: Atualização dos dados vindos do Asana
 Para tarefas já existentes, a sincronização SHALL atualizar título, descrição, projetos, link e prazo do Asana, e MUST NOT alterar prazo interno, prioridade nem status por causa dessas mudanças.

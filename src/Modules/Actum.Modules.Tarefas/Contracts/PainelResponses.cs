@@ -112,6 +112,7 @@ public sealed record TarefaDetalheResponse(
 /// <param name="PrazoInternoAnterior">Internal due date in force when the task was reopened</param>
 /// <param name="PrazoInternoNovo">Internal due date set after the reopening</param>
 /// <param name="ResolvidoEm">When the rework was completed</param>
+/// <param name="ConcluidaEm">Completion that preceded the reopening (from the Asana history); <see langword="null"/> before the history is reprocessed</param>
 /// <param name="Comentarios">
 /// Comments made from the day of this reopening until the day before the next one (or until now), which usually
 /// explain the reason
@@ -124,7 +125,8 @@ public sealed record RetrabalhoResponse(
     DateOnly? PrazoInternoAnterior,
     DateOnly? PrazoInternoNovo,
     DateTime? ResolvidoEm,
-    IReadOnlyList<ComentarioResponse> Comentarios);
+    IReadOnlyList<ComentarioResponse> Comentarios,
+    DateTime? ConcluidaEm = null);
 
 /// <summary>
 /// Comment of a task, copied from the Asana

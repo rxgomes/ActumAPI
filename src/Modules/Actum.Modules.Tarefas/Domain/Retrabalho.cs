@@ -11,9 +11,10 @@ public sealed class Retrabalho : Entity
 
     public const int ReabertaPorMaxLength = 200;
 
-    internal Retrabalho(short numero, DateTime reabertaEm, string? reabertaPor, string? asanaStoryGid, DateOnly? prazoInternoAnterior)
+    internal Retrabalho(short numero, DateTime reabertaEm, string? reabertaPor, string? asanaStoryGid, DateOnly? prazoInternoAnterior, DateTime? concluidaEm = null)
     {
         Numero = numero;
+        ConcluidaEm = concluidaEm;
         ReabertaEm = reabertaEm;
         ReabertaPor = reabertaPor;
         AsanaStoryGid = asanaStoryGid;
@@ -29,6 +30,12 @@ public sealed class Retrabalho : Entity
     /// Sequence of the rework in the task, starting at 1
     /// </summary>
     public short Numero { get; private set; }
+
+    /// <summary>
+    /// Local date and time of the completion that preceded the reopening (from the Asana history); <see langword="null"/>
+    /// for reworks recorded before the history was reprocessed
+    /// </summary>
+    public DateTime? ConcluidaEm { get; private set; }
 
     /// <summary>
     /// Local date and time of the reopening (from the Asana history, or of the synchronization when not found)
@@ -59,4 +66,17 @@ public sealed class Retrabalho : Entity
     /// When the rework was completed; <see langword="null"/> while open
     /// </summary>
     public DateTime? ResolvidoEm { get; set; }
+
+    /// <summary>
+    /// Update the rework from its pair in the Asana history, keeping what the Actum recorded (due dates and the
+    /// resolution set by a completion in the Actum)
+    /// </summary>
+    internal void AtualizarDoHistorico(short numero, ParDoHistorico par)
+    {
+        Numero = numero;
+        ConcluidaEm = par.ConcluidaEm;
+        ReabertaEm = par.ReabertaEm;
+        ReabertaPor = par.ReabertaPor ?? ReabertaPor;
+        ResolvidoEm ??= par.ResolvidoEm;
+    }
 }

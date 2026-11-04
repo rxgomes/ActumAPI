@@ -7,14 +7,23 @@ namespace Actum.Modules.Tarefas.Domain;
 /// </summary>
 public sealed class Sincronizacao : Entity
 {
+    public const int TipoMaxLength = 20;
+
     /// <summary>
     /// Start a synchronization record
     /// </summary>
     /// <param name="iniciadaEm">Local date and time of the start</param>
-    public Sincronizacao(DateTime iniciadaEm)
+    /// <param name="tipo">Synchronization or history reprocessing</param>
+    public Sincronizacao(DateTime iniciadaEm, TipoSincronizacao tipo = TipoSincronizacao.Sincronizacao)
     {
         IniciadaEm = iniciadaEm;
+        Tipo = tipo;
     }
+
+    /// <summary>
+    /// Synchronization or history reprocessing
+    /// </summary>
+    public TipoSincronizacao Tipo { get; private set; }
 
     /// <summary>
     /// Local date and time of the start

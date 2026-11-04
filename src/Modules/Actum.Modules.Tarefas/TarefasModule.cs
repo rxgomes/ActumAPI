@@ -31,6 +31,8 @@ public sealed class TarefasModule : IModule
         services.AddScoped<IPainelService, PainelService>();
         services.AddScoped<IAnaliseService, AnaliseService>();
         services.AddScoped<IComentarioService, ComentarioService>();
+        services.AddScoped<IRetrabalhoService, RetrabalhoService>();
+        services.AddScoped<IAnotacaoService, AnotacaoService>();
 
         // Data de "hoje" do painel; os testes substituem por um relógio fixo.
         services.TryAddSingleton(TimeProvider.System);
@@ -57,5 +59,7 @@ public sealed class TarefasModule : IModule
         endpoints.MapTarefaEndpoints();
         endpoints.MapAnaliseEndpoints();
         endpoints.MapComentarioEndpoints();
+        endpoints.MapRetrabalhoEndpoints();
+        endpoints.MapAnotacaoEndpoints();
     }
 }
