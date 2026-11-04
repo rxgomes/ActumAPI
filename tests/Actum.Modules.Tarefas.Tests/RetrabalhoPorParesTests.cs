@@ -21,7 +21,7 @@ public sealed class RetrabalhoPorParesTests(PostgresFixture postgres) : Sincroni
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task CicloAntigoEmTarefaEmAndamentoEHistoricoSemMudarStatusAsync()
+    public async Task CicloAntigoEmAbertoPoeATarefaEmRetrabalhoSemMudarOPrazoAsync()
     {
         Abertas(TarefaAsana(Nome, prazo: new DateOnly(2026, 11, 10)));
         await SincronizarAsync();
@@ -31,7 +31,7 @@ public sealed class RetrabalhoPorParesTests(PostgresFixture postgres) : Sincroni
         var resumo = await ReprocessarAsync();
 
         var tarefa = await LerTarefaAsync(Nome);
-        Assert.Equal(StatusTarefa.EmAndamento, tarefa!.Status);
+        Assert.Equal(StatusTarefa.Retrabalho, tarefa!.Status);
         Assert.False(tarefa.PrazoInternoPendente);
         Assert.Equal(new DateOnly(2026, 11, 10), tarefa.PrazoInterno);
         var retrabalhos = tarefa.Retrabalhos.OrderBy(r => r.Numero).ToList();
@@ -41,6 +41,38 @@ public sealed class RetrabalhoPorParesTests(PostgresFixture postgres) : Sincroni
         Assert.All(retrabalhos, r => Assert.Null(r.PrazoInternoAnterior));
         Assert.Equal(2, (await ConclusoesAsync()).Count);
         Assert.Equal((1, 0, 2), (resumo.TarefasLidas, resumo.RetrabalhosAntes, resumo.RetrabalhosDepois));
+    }
+
+    [Fact]
+    public async Task CiclosAntigosResolvidosMantemATarefaEmAndamentoAsync()
+    {
+        Abertas(TarefaAsana(Nome));
+        await SincronizarAsync();
+
+        Historico(Nome, Conclusao("c1", "Ricardo", Antes), Reabertura("r1", "Maria", Antes.AddHours(2)), Conclusao("c2", "Ricardo", Antes.AddDays(1)));
+        await ReprocessarAsync();
+
+        var tarefa = await LerTarefaAsync(Nome);
+        Assert.Equal(StatusTarefa.EmAndamento, tarefa!.Status);
+        Assert.NotNull(Assert.Single(tarefa.Retrabalhos).ResolvidoEm);
+    }
+
+    [Fact]
+    public async Task TarefaBloqueadaComRetrabalhoEmAbertoVoltaParaRetrabalhoAoDesbloquearAsync()
+    {
+        Abertas(TarefaAsana(Nome));
+        await SincronizarAsync();
+        await AlterarTarefaAsync(Nome, status: StatusTarefa.Bloqueada);
+        await using (var contexto = TarefasDbContext.Criar(Postgres.DataSource))
+        {
+            await contexto.Database.ExecuteSqlInterpolatedAsync($"update tarefas.tarefa set status_anterior = 'em_andamento' where asana_gid = {Gid(Nome)}", Ct);
+        }
+
+        Historico(Nome, Conclusao("c1", "Ricardo", Antes), Reabertura("r1", "Maria", Antes.AddHours(2)));
+        await ReprocessarAsync();
+
+        var tarefa = await LerTarefaAsync(Nome);
+        Assert.Equal((StatusTarefa.Bloqueada, (StatusTarefa?)StatusTarefa.Retrabalho), (tarefa!.Status, tarefa.StatusAnterior));
     }
 
     [Fact]

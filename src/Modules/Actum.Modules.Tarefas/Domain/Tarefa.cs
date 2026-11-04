@@ -232,7 +232,9 @@ public sealed class Tarefa : Entity
     /// dates and the resolution recorded by the Actum); recorded reworks without a pair are removed and their
     /// branches lose only the link. Only a new pair reopened after the completion the Actum knows (completed task, or
     /// archived because it was completed in the Asana) puts the task in <see cref="StatusTarefa.Retrabalho"/> with
-    /// the internal due date pending; older pairs are history. A completed task back in the open list without such a
+    /// the internal due date pending; older pairs are history. An open task whose last rework is still open (not completed
+    /// again) is shown as in rework: <see cref="StatusTarefa.EmAndamento"/> becomes <see cref="StatusTarefa.Retrabalho"/>
+    /// (and a blocked one returns to it), without changing the internal due date. A completed task back in the open list without such a
     /// pair goes back to <see cref="StatusTarefa.EmAndamento"/> with the internal due date pending.
     /// </summary>
     /// <param name="stories">Task history in the Asana</param>
@@ -308,6 +310,21 @@ public sealed class Tarefa : Entity
             Status = StatusTarefa.EmAndamento;
             StatusAnterior = null;
             PrazoInternoPendente = true;
+        }
+
+        // Retrabalho em aberto (o último par não foi concluído de novo): a tarefa em andamento passa a "retrabalho",
+        // sem mudar o prazo; a bloqueada volta para "retrabalho" ao desbloquear. A entrada fica como está.
+        var ultimo = _retrabalhos.MaxBy(retrabalho => retrabalho.Numero);
+        if (ultimo is { ResolvidoEm: null })
+        {
+            if (Status == StatusTarefa.EmAndamento)
+            {
+                Status = StatusTarefa.Retrabalho;
+            }
+            else if (Status == StatusTarefa.Bloqueada && StatusAnterior == StatusTarefa.EmAndamento)
+            {
+                StatusAnterior = StatusTarefa.Retrabalho;
+            }
         }
 
         return reabriram;

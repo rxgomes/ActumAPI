@@ -30,15 +30,26 @@ Ao ler o histórico de uma tarefa no Asana (sincronização ou reprocessamento),
 - **THEN** nenhum retrabalho MUST ser criado, e a tarefa MUST voltar para `em_andamento` com `prazo_interno_pendente = true`
 
 ### Requirement: Efeitos da reabertura na tarefa
-Só uma reabertura nova (retrabalho que não existia antes do recálculo) com `reaberta_em` posterior à conclusão que o Actum conhece da tarefa (status `concluida`, pela `concluida_em` local, ou arquivada como `concluida_no_asana`, pela data de arquivamento) SHALL colocar a tarefa no status `retrabalho`, com `prazo_interno_pendente = true`, guardando o prazo interno vigente no retrabalho como prazo anterior. Os demais retrabalhos são histórico e MUST NOT mudar status nem prazo da tarefa.
+Só uma reabertura nova (retrabalho que não existia antes do recálculo) com `reaberta_em` posterior à conclusão que o Actum conhece da tarefa (status `concluida`, pela `concluida_em` local, ou arquivada como `concluida_no_asana`, pela data de arquivamento) SHALL colocar a tarefa no status `retrabalho`, com `prazo_interno_pendente = true`, guardando o prazo interno vigente no retrabalho como prazo anterior. Os demais retrabalhos são histórico e MUST NOT mudar o prazo da tarefa.
 
 #### Scenario: Prazo interno vencido
 - **WHEN** uma tarefa `concluida` pelo Actum, com prazo interno `2026-10-20`, é reaberta no Asana e sincronizada em `2026-11-03`
 - **THEN** a tarefa MUST ficar com status `retrabalho` e `prazo_interno_pendente = true`, e o retrabalho MUST ter `prazo_interno_anterior = 2026-10-20`
 
-#### Scenario: Ciclo antigo em tarefa em andamento
-- **WHEN** o reprocessamento encontra, numa tarefa `em_andamento`, um par concluiu → não concluída de antes da carga inicial
-- **THEN** o retrabalho MUST ser registrado e a tarefa MUST continuar `em_andamento`, com o mesmo prazo interno
+#### Scenario: Ciclo antigo já resolvido
+- **WHEN** o reprocessamento encontra, numa tarefa `em_andamento`, um par concluiu → não concluída de antes da carga inicial, seguido de nova conclusão
+- **THEN** o retrabalho MUST ser registrado como resolvido e a tarefa MUST continuar `em_andamento`, com o mesmo prazo interno
+
+### Requirement: Retrabalho em aberto no status
+Uma tarefa `em_andamento` cujo último retrabalho está em aberto (sem nova conclusão depois da reabertura) SHALL passar para o status `retrabalho`, sem mudar o prazo interno nem marcar prazo pendente, para aparecer no bloco Retrabalho do Painel. Uma tarefa `bloqueada` nessa situação MUST voltar para `retrabalho` ao desbloquear. Tarefas em `entrada` MUST continuar na entrada.
+
+#### Scenario: Ciclo antigo em aberto
+- **WHEN** o reprocessamento encontra, numa tarefa `em_andamento` com prazo interno `2026-10-29`, um par concluiu → não concluída sem conclusão posterior
+- **THEN** a tarefa MUST ficar com status `retrabalho`, prazo interno `2026-10-29` e `prazo_interno_pendente = false`
+
+#### Scenario: Tarefa bloqueada
+- **WHEN** a tarefa está `bloqueada` (vinda de `em_andamento`) e o último retrabalho está em aberto
+- **THEN** ela MUST continuar `bloqueada` e, ao desbloquear, MUST voltar para `retrabalho`
 
 ### Requirement: Reabertura de tarefa arquivada por conclusão no Asana
 Uma tarefa arquivada com motivo `concluida_no_asana` que for reaberta no Asana SHALL ser tratada como retrabalho, considerando a data de arquivamento no lugar da data de conclusão.
