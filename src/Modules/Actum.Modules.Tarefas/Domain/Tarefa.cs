@@ -98,6 +98,13 @@ public sealed class Tarefa : Entity
     public StatusTarefa? StatusAnterior { get; private set; }
 
     /// <summary>
+    /// Whether the user is working on the task now (<c>Em andamento</c>); otherwise it is paused (<c>Pausada</c>).
+    /// Independent of <see cref="Status"/>: a task in rework can also be in progress or paused. Only
+    /// <see cref="Iniciar"/> and <see cref="Retomar"/> turn it on; blocking, completing and archiving turn it off.
+    /// </summary>
+    public bool EmAndamento { get; private set; }
+
+    /// <summary>
     /// Priority from 1 to 3; <see langword="null"/> when not set
     /// </summary>
     public short? Prioridade { get; private set; }
@@ -339,6 +346,7 @@ public sealed class Tarefa : Entity
     {
         StatusAnterior = Status;
         Status = StatusTarefa.Arquivada;
+        EmAndamento = false;
         ArquivadaEm = agora;
         MotivoArquivamento = motivo;
     }
@@ -376,6 +384,7 @@ public sealed class Tarefa : Entity
         }
 
         Status = StatusTarefa.EmAndamento;
+        EmAndamento = true;
         DefinirPrazoInterno(prazoInterno);
         _branches.Add(new TarefaBranch(TipoBranch.Base, nomeBase, null));
         _branches.Add(new TarefaBranch(TipoBranch.Implementacao, nomeImplementacao, null));
@@ -394,6 +403,50 @@ public sealed class Tarefa : Entity
 
         StatusAnterior = Status;
         Status = StatusTarefa.Bloqueada;
+        EmAndamento = false;
+    }
+
+    /// <summary>
+    /// Resume work on a paused task in progress or in rework (<c>Em andamento</c>). Nothing is sent to the Asana.
+    /// </summary>
+    /// <exception cref="DomainException">The task is not in progress nor in rework, or is already in progress</exception>
+    public void Retomar()
+    {
+        if (Status == StatusTarefa.Bloqueada)
+        {
+            throw new DomainException("Desbloqueie a tarefa antes de iniciá-la.");
+        }
+
+        if (Status == StatusTarefa.Entrada)
+        {
+            throw new DomainException("Para iniciar uma tarefa da entrada, informe as branches e o prazo interno.");
+        }
+
+        if (Status is not (StatusTarefa.EmAndamento or StatusTarefa.Retrabalho))
+        {
+            throw new DomainException($"Só é possível iniciar tarefas pausadas ou em retrabalho. Status atual: {StatusTarefaTexto.Descrever(Status)}.");
+        }
+
+        if (EmAndamento)
+        {
+            throw new DomainException("A tarefa já está em andamento.");
+        }
+
+        EmAndamento = true;
+    }
+
+    /// <summary>
+    /// Pause a task in progress (<c>Pausada</c>). Nothing is sent to the Asana.
+    /// </summary>
+    /// <exception cref="DomainException">The task is not in progress</exception>
+    public void Pausar()
+    {
+        if (!EmAndamento)
+        {
+            throw new DomainException("Só é possível pausar uma tarefa em andamento.");
+        }
+
+        EmAndamento = false;
     }
 
     /// <summary>
@@ -543,6 +596,7 @@ public sealed class Tarefa : Entity
 
         Status = StatusTarefa.Concluida;
         StatusAnterior = null;
+        EmAndamento = false;
         ConcluidaEm = agora;
     }
 

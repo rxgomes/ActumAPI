@@ -60,6 +60,20 @@ public static class TarefaEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPost("/{identifier:guid}/retomar", RetomarAsync)
+            .WithName("RetomarTarefa")
+            .WithSummary("Retomar tarefa (Em andamento)")
+            .WithDescription("Põe em andamento uma tarefa pausada, já iniciada ou em retrabalho. Tarefas bloqueadas precisam ser desbloqueadas antes. Nada é enviado ao Asana.")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/{identifier:guid}/pausar", PausarAsync)
+            .WithName("PausarTarefa")
+            .WithSummary("Pausar tarefa")
+            .WithDescription("Pausa uma tarefa em andamento. Nada é enviado ao Asana.")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         group.MapPost("/{identifier:guid}/bloquear", BloquearAsync)
             .WithName("BloquearTarefa")
             .WithSummary("Bloquear tarefa")
@@ -163,6 +177,22 @@ public static class TarefaEndpoints
         CancellationToken cancellationToken)
     {
         return ParaResposta(await service.IniciarAsync(identifier, request, cancellationToken));
+    }
+
+    private static async Task<Results<Ok<TarefaCicloResponse>, ProblemHttpResult>> RetomarAsync(
+        Guid identifier,
+        ITarefaService service,
+        CancellationToken cancellationToken)
+    {
+        return ParaResposta(await service.RetomarAsync(identifier, cancellationToken));
+    }
+
+    private static async Task<Results<Ok<TarefaCicloResponse>, ProblemHttpResult>> PausarAsync(
+        Guid identifier,
+        ITarefaService service,
+        CancellationToken cancellationToken)
+    {
+        return ParaResposta(await service.PausarAsync(identifier, cancellationToken));
     }
 
     private static async Task<Results<Ok<TarefaCicloResponse>, ProblemHttpResult>> BloquearAsync(

@@ -36,6 +36,7 @@ internal sealed class TarefaConfiguration : IEntityTypeConfiguration<Tarefa>
         builder.Property(tarefa => tarefa.Projetos).HasMaxLength(Tarefa.ProjetosMaxLength);
         builder.Property(tarefa => tarefa.LinkAsana).HasMaxLength(Tarefa.LinkMaxLength);
         builder.Property(tarefa => tarefa.PrazoInternoPendente).HasDefaultValue(false).ValueGeneratedNever();
+        builder.Property(tarefa => tarefa.EmAndamento).HasDefaultValue(false).ValueGeneratedNever();
 
         builder.Property(tarefa => tarefa.Status)
             .HasConversion(new EnumSnakeCaseConverter<StatusTarefa>())

@@ -26,6 +26,28 @@ public interface ITarefaService
     Task<TarefaResultado> IniciarAsync(Guid identifier, IniciarTarefaRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Resume work on a paused task already started or in rework (it becomes <c>Em andamento</c>)
+    /// </summary>
+    /// <param name="identifier">Task identifier</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The task in progress, or <see cref="TarefaResultadoStatus.NaoEncontrada"/></returns>
+    /// <author>Ricardo Gomes</author>
+    /// <created>2026-11-04</created>
+    /// <modified>2026-11-04</modified>
+    Task<TarefaResultado> RetomarAsync(Guid identifier, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Pause a task in progress (it becomes <c>Pausada</c>)
+    /// </summary>
+    /// <param name="identifier">Task identifier</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The paused task, or <see cref="TarefaResultadoStatus.NaoEncontrada"/></returns>
+    /// <author>Ricardo Gomes</author>
+    /// <created>2026-11-04</created>
+    /// <modified>2026-11-04</modified>
+    Task<TarefaResultado> PausarAsync(Guid identifier, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Block a task in progress or in rework, keeping the status to return to
     /// </summary>
     /// <param name="identifier">Task identifier</param>

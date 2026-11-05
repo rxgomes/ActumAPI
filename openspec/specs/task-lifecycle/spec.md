@@ -11,7 +11,7 @@ A API SHALL permitir iniciar uma tarefa com status `entrada` informando branch b
 
 #### Scenario: Início válido
 - **WHEN** um cliente chama `POST /tarefas/{identifier}/iniciar` com base `main`, implementação `feature/ipi-devolvido` e prazo `2026-11-10` para uma tarefa em `entrada`
-- **THEN** a tarefa MUST ficar `em_andamento` com `prazo_interno = 2026-11-10`, as duas branches MUST ser registradas como não enviadas e nenhuma requisição MUST ser feita ao Asana
+- **THEN** a tarefa MUST ficar `em_andamento`, com `emAndamento = true` e `prazo_interno = 2026-11-10`, as duas branches MUST ser registradas como não enviadas e nenhuma requisição MUST ser feita ao Asana
 
 #### Scenario: Branches iguais
 - **WHEN** a branch base e a de implementação têm o mesmo nome
@@ -25,8 +25,27 @@ A API SHALL permitir iniciar uma tarefa com status `entrada` informando branch b
 - **WHEN** um cliente tenta iniciar uma tarefa `em_andamento`
 - **THEN** a resposta MUST ter status `400` com mensagem em pt-BR citando o status atual
 
+### Requirement: Em andamento e pausada
+Cada tarefa SHALL ter o indicador `emAndamento`, independente do status: `true` é "Em andamento" e `false` é "Pausada". Somente iniciar pela entrada e `POST /tarefas/{identifier}/retomar` MUST ligá-lo; `POST /tarefas/{identifier}/pausar`, bloquear, concluir e arquivar MUST desligá-lo. As demais transições (carga inicial, desbloqueio, reabertura e volta para a lista do Asana) MUST deixar a tarefa pausada. Nada é enviado ao Asana. Várias tarefas podem estar em andamento ao mesmo tempo.
+
+#### Scenario: Pausar e retomar
+- **WHEN** uma tarefa `em_andamento` em andamento é pausada e depois retomada
+- **THEN** `emAndamento` MUST ficar `false` e depois `true`, sem mudar o status
+
+#### Scenario: Retrabalho retomado
+- **WHEN** uma tarefa em `retrabalho` pausada é retomada
+- **THEN** ela MUST continuar em `retrabalho`, com `emAndamento = true`
+
+#### Scenario: Carga inicial
+- **WHEN** uma tarefa entra pela carga inicial da empresa
+- **THEN** ela MUST ficar `em_andamento` com `emAndamento = false`
+
+#### Scenario: Ação que não se aplica
+- **WHEN** um cliente retoma uma tarefa já em andamento, bloqueada ou na entrada, ou pausa uma tarefa pausada
+- **THEN** a resposta MUST ter status `400` com mensagem em pt-BR
+
 ### Requirement: Bloquear e desbloquear
-A API SHALL permitir bloquear uma tarefa `em_andamento` ou `retrabalho` e desbloqueá-la, retornando ao status que tinha antes do bloqueio.
+A API SHALL permitir bloquear uma tarefa `em_andamento` ou `retrabalho` e desbloqueá-la, retornando ao status que tinha antes do bloqueio. O bloqueio MUST pausar a tarefa, e o desbloqueio MUST mantê-la pausada.
 
 #### Scenario: Bloqueio durante retrabalho
 - **WHEN** uma tarefa em `retrabalho` é bloqueada e depois desbloqueada

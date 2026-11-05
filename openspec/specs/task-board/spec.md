@@ -7,7 +7,7 @@ Define as consultas que o front usa para mostrar as tarefas: o painel agrupado p
 ## Requirements
 
 ### Requirement: Painel agrupado
-A API SHALL expor `GET /tarefas/painel`, que devolve as tarefas não concluídas e não arquivadas nos grupos `retrabalho`, `entrada`, `atrasadas`, `hoje`, `esta_semana`, `proximas` e `sem_prazo`, nessa ordem, com cada tarefa em um único grupo.
+A API SHALL expor `GET /tarefas/painel`, que devolve as tarefas não arquivadas nos grupos `retrabalho`, `entrada`, `atrasadas`, `hoje`, `esta_semana`, `proximas`, `sem_prazo` e `concluidas`, nessa ordem, com cada tarefa em um único grupo.
 
 #### Scenario: Tarefa reaberta com prazo interno vencido
 - **WHEN** uma tarefa em `retrabalho` tem prazo interno anterior a hoje
@@ -29,8 +29,12 @@ A API SHALL expor `GET /tarefas/painel`, que devolve as tarefas não concluídas
 - **WHEN** uma tarefa reaberta é bloqueada
 - **THEN** ela MUST continuar no grupo `retrabalho`, indicada como bloqueada
 
-#### Scenario: Tarefas concluídas e arquivadas
-- **WHEN** existem tarefas `concluida` e `arquivada`
+#### Scenario: Tarefas concluídas pelo Actum
+- **WHEN** existem tarefas com status `concluida`
+- **THEN** elas MUST aparecer somente no grupo `concluidas`, o último, da concluída mais recentemente para a mais antiga
+
+#### Scenario: Tarefas arquivadas
+- **WHEN** existem tarefas `arquivada` (inclusive as concluídas direto no Asana)
 - **THEN** elas MUST NOT aparecer no painel
 
 #### Scenario: Grupo vazio
@@ -38,7 +42,15 @@ A API SHALL expor `GET /tarefas/painel`, que devolve as tarefas não concluídas
 - **THEN** o grupo MUST ser devolvido com a lista vazia
 
 ### Requirement: Filtros do painel
-O painel SHALL aceitar filtro por empresa e por texto (título ou descrição, sem diferenciar maiúsculas e acentos). Sem filtro de empresa, MUST considerar todas as empresas.
+O painel SHALL aceitar filtro por empresa, por status (`entrada`, `em_andamento`, `bloqueada`, `retrabalho` ou `concluida`) e por texto (título ou descrição, sem diferenciar maiúsculas e acentos). Sem filtro de empresa, MUST considerar todas as empresas.
+
+#### Scenario: Filtro por status
+- **WHEN** um cliente chama `GET /tarefas/painel?status=bloqueada`
+- **THEN** somente tarefas `bloqueada` MUST ser devolvidas, com todos os grupos presentes
+
+#### Scenario: Status fora do painel
+- **WHEN** um cliente chama `GET /tarefas/painel?status=arquivada`
+- **THEN** a resposta MUST ter status `400` com o campo `Status` em `errors`
 
 #### Scenario: Filtro por empresa
 - **WHEN** um cliente chama `GET /tarefas/painel?empresa={identifier da Aureum-ERP}`

@@ -9,6 +9,7 @@ namespace Actum.Modules.Tarefas.Contracts;
 /// <param name="Identifier">Task identifier</param>
 /// <param name="Status">Internal status (<c>entrada</c>, <c>em_andamento</c>, <c>bloqueada</c>, <c>concluida</c>, <c>retrabalho</c>, <c>arquivada</c>)</param>
 /// <param name="StatusAnterior">Status to return to when unblocked</param>
+/// <param name="EmAndamento">Whether the task is in progress (<c>Em andamento</c>); otherwise it is paused (<c>Pausada</c>)</param>
 /// <param name="PrazoInterno">Internal due date</param>
 /// <param name="PrazoInternoPendente">Whether the task was reopened and waits for a new internal due date</param>
 /// <param name="PrazoAsana">Due date in the Asana</param>
@@ -19,6 +20,7 @@ public sealed record TarefaCicloResponse(
     Guid Identifier,
     [property: JsonConverter(typeof(SnakeCaseEnumJsonConverter<StatusTarefa>))] StatusTarefa Status,
     [property: JsonConverter(typeof(SnakeCaseEnumJsonConverter<StatusTarefa>))] StatusTarefa? StatusAnterior,
+    bool EmAndamento,
     DateOnly? PrazoInterno,
     bool PrazoInternoPendente,
     DateOnly? PrazoAsana,

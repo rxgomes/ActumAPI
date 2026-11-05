@@ -24,7 +24,7 @@ public static class PainelEndpoints
         group.MapGet("/", ObterAsync)
             .WithName("ObterPainel")
             .WithSummary("Painel de tarefas")
-            .WithDescription("Devolve as tarefas não concluídas e não arquivadas nos grupos retrabalho, entrada, atrasadas, hoje, esta_semana (até domingo), proximas e sem_prazo, nessa ordem e sempre presentes. Filtros opcionais por empresa e texto (título ou descrição, sem diferenciar maiúsculas e acentos).")
+            .WithDescription("Devolve as tarefas não arquivadas nos grupos retrabalho, entrada, atrasadas, hoje, esta_semana (até domingo), proximas, sem_prazo e concluidas (concluídas pelo Actum, a mais recente primeiro), nessa ordem e sempre presentes. Filtros opcionais por empresa, status (entrada, em_andamento, bloqueada, retrabalho ou concluida) e texto (título ou descrição, sem diferenciar maiúsculas e acentos).")
             .ProducesValidationProblem();
 
         return endpoints;

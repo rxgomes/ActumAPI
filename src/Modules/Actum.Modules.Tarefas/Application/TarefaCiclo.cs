@@ -34,6 +34,7 @@ internal static class TarefaCiclo
             tarefa.Identifier,
             tarefa.Status,
             tarefa.StatusAnterior,
+            tarefa.EmAndamento,
             tarefa.PrazoInterno,
             tarefa.PrazoInternoPendente,
             tarefa.PrazoAsana,

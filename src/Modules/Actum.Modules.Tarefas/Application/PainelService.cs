@@ -26,6 +26,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
 
     public const string GrupoSemPrazo = "sem_prazo";
 
+    public const string GrupoConcluidas = "concluidas";
+
     private const char EscapeDoLike = '\\';
 
     /// <summary>
@@ -34,16 +36,23 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
     private const short PrioridadeAusente = 4;
 
     private static readonly string[] OrdemDosGrupos =
-        [GrupoRetrabalho, GrupoEntrada, GrupoAtrasadas, GrupoHoje, GrupoEstaSemana, GrupoProximas, GrupoSemPrazo];
+        [GrupoRetrabalho, GrupoEntrada, GrupoAtrasadas, GrupoHoje, GrupoEstaSemana, GrupoProximas, GrupoSemPrazo, GrupoConcluidas];
 
     public async Task<PainelResponse> ObterPainelAsync(PainelFiltro filtro, CancellationToken cancellationToken)
     {
         var hoje = DateOnly.FromDateTime(timeProvider.GetLocalNow().DateTime);
         var domingo = hoje.AddDays((7 - (int)hoje.DayOfWeek) % 7);
 
-        var abertas = context.Set<Tarefa>()
-            .Where(tarefa => tarefa.Status != StatusTarefa.Concluida && tarefa.Status != StatusTarefa.Arquivada);
-        var linhas = await LerCartoes(Filtrar(abertas, filtro.Busca), filtro.Empresa).ToListAsync(cancellationToken);
+        // Concluídas pelo Actum vão para o último grupo; as arquivadas (inclusive as concluídas direto no Asana) ficam de fora.
+        var doPainel = context.Set<Tarefa>()
+            .Where(tarefa => tarefa.Status != StatusTarefa.Arquivada);
+        if (filtro.Status is { } texto)
+        {
+            var status = EnumSnakeCaseConverter<StatusTarefa>.ParaEnum(texto);
+            doPainel = doPainel.Where(tarefa => tarefa.Status == status);
+        }
+
+        var linhas = await LerCartoes(Filtrar(doPainel, filtro.Busca), filtro.Empresa).ToListAsync(cancellationToken);
 
         var porGrupo = linhas.ToLookup(linha => Grupo(linha, hoje, domingo));
         var grupos = OrdemDosGrupos
@@ -116,6 +125,7 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
             new EmpresaResumoResponse(empresa.Identifier, empresa.Nome, empresa.Cor),
             tarefa.Status,
             tarefa.StatusAnterior,
+            tarefa.EmAndamento,
             tarefa.PrazoInterno,
             tarefa.PrazoInternoPendente,
             tarefa.PrazoAsana,
@@ -188,6 +198,7 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
                    Projetos = tarefa.Projetos,
                    Status = tarefa.Status,
                    StatusAnterior = tarefa.StatusAnterior,
+                   EmAndamento = tarefa.EmAndamento,
                    PrazoInterno = tarefa.PrazoInterno,
                    PrazoAsana = tarefa.PrazoAsana,
                    PrazoInternoPendente = tarefa.PrazoInternoPendente,
@@ -195,6 +206,7 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
                    QuantidadeRetrabalhos = tarefa.Retrabalhos.Count(),
                    ComentariosNaoLidos = tarefa.Comentarios.Count(comentario => !comentario.Lido),
                    UltimaReaberturaEm = tarefa.Retrabalhos.Max(retrabalho => (DateTime?)retrabalho.ReabertaEm),
+                   ConcluidaEm = tarefa.ConcluidaEm,
                    CreateIn = tarefa.CreateIn,
                };
     }
@@ -204,6 +216,11 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
     /// </summary>
     private static string Grupo(LinhaDoCartao linha, DateOnly hoje, DateOnly domingo)
     {
+        if (linha.Status == StatusTarefa.Concluida)
+        {
+            return GrupoConcluidas;
+        }
+
         if (EmRetrabalho(linha))
         {
             return GrupoRetrabalho;
@@ -239,6 +256,9 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
                 .OrderBy(linha => linha.Prioridade ?? PrioridadeAusente),
             GrupoSemPrazo => linhas
                 .OrderBy(linha => linha.CreateIn),
+            // Concluída mais recentemente primeiro.
+            GrupoConcluidas => linhas
+                .OrderByDescending(linha => linha.ConcluidaEm ?? DateTime.MinValue),
             _ => linhas
                 .OrderBy(linha => linha.PrazoInterno)
                 .ThenBy(linha => linha.Prioridade ?? PrioridadeAusente),
@@ -297,7 +317,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
             linha.Prioridade,
             linha.QuantidadeRetrabalhos,
             linha.ComentariosNaoLidos,
-            linha.Status == StatusTarefa.Bloqueada);
+            linha.Status == StatusTarefa.Bloqueada,
+            linha.EmAndamento);
     }
 
     private static ComentarioResponse ParaComentario(Comentario comentario)
@@ -333,6 +354,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
 
         public StatusTarefa? StatusAnterior { get; init; }
 
+        public bool EmAndamento { get; init; }
+
         public DateOnly? PrazoInterno { get; init; }
 
         public DateOnly? PrazoAsana { get; init; }
@@ -346,6 +369,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
         public int ComentariosNaoLidos { get; init; }
 
         public DateTime? UltimaReaberturaEm { get; init; }
+
+        public DateTime? ConcluidaEm { get; init; }
 
         public DateTime CreateIn { get; init; }
     }

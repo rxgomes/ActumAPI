@@ -15,6 +15,15 @@ public sealed record PainelFiltro
     public Guid? Empresa { get; init; }
 
     /// <summary>
+    /// Status: <c>entrada</c>, <c>em_andamento</c>, <c>bloqueada</c>, <c>retrabalho</c> or <c>concluida</c>; without
+    /// it, every status of the board is considered (archived tasks are never on the board)
+    /// </summary>
+    [FromQuery(Name = "status")]
+    [AllowedValues(null, "entrada", "em_andamento", "bloqueada", "retrabalho", "concluida",
+        ErrorMessage = "O status deve ser entrada, em_andamento, bloqueada, retrabalho ou concluida.")]
+    public string? Status { get; init; }
+
+    /// <summary>
     /// Text searched in the title and the description, ignoring case and accents
     /// </summary>
     [FromQuery(Name = "busca")]

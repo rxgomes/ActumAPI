@@ -4,19 +4,19 @@ using Actum.Modules.Tarefas.Domain;
 namespace Actum.Modules.Tarefas.Contracts;
 
 /// <summary>
-/// Board: open tasks grouped by what to do first
+/// Board: open tasks grouped by what to do first, then the tasks completed by the Actum
 /// </summary>
 /// <param name="Hoje">Date used as "today" by the grouping</param>
 /// <param name="Grupos">
 /// Every group, always present and in this order: <c>retrabalho</c>, <c>entrada</c>, <c>atrasadas</c>, <c>hoje</c>,
-/// <c>esta_semana</c>, <c>proximas</c>, <c>sem_prazo</c>
+/// <c>esta_semana</c>, <c>proximas</c>, <c>sem_prazo</c>, <c>concluidas</c> (completed by the Actum, most recent first)
 /// </param>
 public sealed record PainelResponse(DateOnly Hoje, IReadOnlyList<GrupoPainelResponse> Grupos);
 
 /// <summary>
 /// One board group
 /// </summary>
-/// <param name="Grupo">Group id (<c>retrabalho</c>, <c>entrada</c>, <c>atrasadas</c>, <c>hoje</c>, <c>esta_semana</c>, <c>proximas</c>, <c>sem_prazo</c>)</param>
+/// <param name="Grupo">Group id (<c>retrabalho</c>, <c>entrada</c>, <c>atrasadas</c>, <c>hoje</c>, <c>esta_semana</c>, <c>proximas</c>, <c>sem_prazo</c>, <c>concluidas</c>)</param>
 /// <param name="Tarefas">Tasks of the group, in display order; empty when there is none</param>
 public sealed record GrupoPainelResponse(string Grupo, IReadOnlyList<CartaoTarefaResponse> Tarefas);
 
@@ -35,6 +35,7 @@ public sealed record GrupoPainelResponse(string Grupo, IReadOnlyList<CartaoTaref
 /// <param name="QuantidadeRetrabalhos">Number of reworks (reopenings)</param>
 /// <param name="ComentariosNaoLidos">Number of comments not yet read</param>
 /// <param name="Bloqueada">Whether the task is blocked</param>
+/// <param name="EmAndamento">Whether the task is in progress (<c>Em andamento</c>); otherwise it is paused (<c>Pausada</c>)</param>
 public sealed record CartaoTarefaResponse(
     Guid Identifier,
     string Titulo,
@@ -47,7 +48,8 @@ public sealed record CartaoTarefaResponse(
     short? Prioridade,
     int QuantidadeRetrabalhos,
     int ComentariosNaoLidos,
-    bool Bloqueada);
+    bool Bloqueada,
+    bool EmAndamento);
 
 /// <summary>
 /// Company data shown with a task
@@ -69,6 +71,7 @@ public sealed record EmpresaResumoResponse(Guid Identifier, string Nome, string 
 /// <param name="Empresa">Company of the task</param>
 /// <param name="Status">Internal status</param>
 /// <param name="StatusAnterior">Status before blocking or archiving</param>
+/// <param name="EmAndamento">Whether the task is in progress (<c>Em andamento</c>); otherwise it is paused (<c>Pausada</c>)</param>
 /// <param name="PrazoInterno">Internal due date</param>
 /// <param name="PrazoInternoPendente">Whether the task was reopened and waits for a new internal due date</param>
 /// <param name="PrazoAsana">Due date in the Asana</param>
@@ -90,6 +93,7 @@ public sealed record TarefaDetalheResponse(
     EmpresaResumoResponse Empresa,
     [property: JsonConverter(typeof(SnakeCaseEnumJsonConverter<StatusTarefa>))] StatusTarefa Status,
     [property: JsonConverter(typeof(SnakeCaseEnumJsonConverter<StatusTarefa>))] StatusTarefa? StatusAnterior,
+    bool EmAndamento,
     DateOnly? PrazoInterno,
     bool PrazoInternoPendente,
     DateOnly? PrazoAsana,

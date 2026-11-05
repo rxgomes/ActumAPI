@@ -132,6 +132,18 @@ public sealed class TarefaApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PainelComStatusArquivadaRetorna400Async()
+    {
+        var (status, corpo, tipo) = await EnviarAsync(HttpMethod.Get, "/tarefas/painel?status=arquivada", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(ProblemJson, tipo);
+        Assert.Equal(
+            ["O status deve ser entrada, em_andamento, bloqueada, retrabalho ou concluida."],
+            corpo.GetProperty("errors").GetProperty("Status").EnumerateArray().Select(e => e.GetString()));
+    }
+
+    [Fact]
     public async Task DetalheEPainelRespondemEmJsonEInexistenteRetorna404Async()
     {
         var (status, detalhe, _) = await EnviarAsync(HttpMethod.Get, $"/tarefas/{_tarefa}", null);
@@ -141,7 +153,7 @@ public sealed class TarefaApiTests(PostgresFixture postgres) : IAsyncLifetime
 
         var (statusPainel, painel, _) = await EnviarAsync(HttpMethod.Get, "/tarefas/painel?busca=Tarefa", null);
         Assert.Equal(HttpStatusCode.OK, statusPainel);
-        Assert.Equal(7, painel.GetProperty("grupos").GetArrayLength());
+        Assert.Equal(8, painel.GetProperty("grupos").GetArrayLength());
 
         var (statusInexistente, _, tipo) = await EnviarAsync(HttpMethod.Get, $"/tarefas/{Guid.CreateVersion7()}", null);
         Assert.Equal(HttpStatusCode.NotFound, statusInexistente);

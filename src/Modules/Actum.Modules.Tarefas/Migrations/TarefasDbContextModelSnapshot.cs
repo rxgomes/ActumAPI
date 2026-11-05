@@ -648,6 +648,11 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasColumnType("text")
                         .HasColumnName("descricao_html");
 
+                    b.Property<bool>("EmAndamento")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("em_andamento");
+
                     b.Property<long>("EmpresaId")
                         .HasColumnType("bigint")
                         .HasColumnName("empresa_id");

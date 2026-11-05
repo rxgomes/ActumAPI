@@ -377,6 +377,75 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     }
 
     [Fact]
+    public async Task IniciarPelaEntradaDeixaEmAndamentoEPausarERetomarAlternamAsync()
+    {
+        var tarefa = await IniciadaAsync();
+        Assert.True((await LerTarefaAsync(Nome))!.EmAndamento);
+        LimparChamadas();
+
+        var pausada = await TarefasAsync(service => service.PausarAsync(tarefa, Ct));
+        Assert.False(pausada.Tarefa!.EmAndamento);
+        Assert.Equal(StatusTarefa.EmAndamento, pausada.Tarefa.Status);
+
+        var erroAoPausar = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.PausarAsync(tarefa, Ct)));
+        Assert.Equal("Só é possível pausar uma tarefa em andamento.", erroAoPausar.Message);
+
+        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, Ct));
+        Assert.True(retomada.Tarefa!.EmAndamento);
+        Assert.True((await LerTarefaAsync(Nome))!.EmAndamento);
+
+        var erroAoRetomar = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, Ct)));
+        Assert.Equal("A tarefa já está em andamento.", erroAoRetomar.Message);
+        AssertNenhumaChamadaAoAsana();
+    }
+
+    [Fact]
+    public async Task TarefaDaCargaInicialComecaPausadaAsync()
+    {
+        var tarefa = await NaCargaInicialAsync();
+
+        var lida = await LerTarefaAsync(Nome);
+        Assert.Equal((StatusTarefa.EmAndamento, false), (lida!.Status, lida.EmAndamento));
+        Assert.True((await TarefasAsync(service => service.RetomarAsync(tarefa, Ct))).Tarefa!.EmAndamento);
+    }
+
+    [Fact]
+    public async Task TarefaDaEntradaNaoERetomadaSemBranchesEPrazoAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, Ct)));
+
+        Assert.Equal("Para iniciar uma tarefa da entrada, informe as branches e o prazo interno.", erro.Message);
+    }
+
+    [Fact]
+    public async Task BloquearPausaEDesbloquearMantemPausadaAsync()
+    {
+        var tarefa = await IniciadaAsync();
+
+        await TarefasAsync(service => service.BloquearAsync(tarefa, Ct));
+        Assert.False((await LerTarefaAsync(Nome))!.EmAndamento);
+
+        var erro = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, Ct)));
+        Assert.Equal("Desbloqueie a tarefa antes de iniciá-la.", erro.Message);
+
+        var desbloqueada = await TarefasAsync(service => service.DesbloquearAsync(tarefa, Ct));
+        Assert.Equal((StatusTarefa.EmAndamento, false), (desbloqueada.Tarefa!.Status, desbloqueada.Tarefa.EmAndamento));
+    }
+
+    [Fact]
+    public async Task ConcluirPausaEORetrabalhoComecaPausadoEPodeSerRetomadoAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        Assert.False((await LerTarefaAsync(Nome))!.EmAndamento);
+
+        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, Ct));
+
+        Assert.Equal((StatusTarefa.Retrabalho, true), (retomada.Tarefa!.Status, retomada.Tarefa.EmAndamento));
+    }
+
+    [Fact]
     public async Task ConclusaoResolveORetrabalhoAbertoAsync()
     {
         var tarefa = await EmRetrabalhoAsync();

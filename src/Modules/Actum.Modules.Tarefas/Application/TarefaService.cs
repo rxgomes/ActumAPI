@@ -17,6 +17,16 @@ internal sealed class TarefaService(TarefasDbContext context) : ITarefaService
             cancellationToken);
     }
 
+    public Task<TarefaResultado> RetomarAsync(Guid identifier, CancellationToken cancellationToken)
+    {
+        return AplicarAsync(identifier, tarefa => tarefa.Retomar(), cancellationToken);
+    }
+
+    public Task<TarefaResultado> PausarAsync(Guid identifier, CancellationToken cancellationToken)
+    {
+        return AplicarAsync(identifier, tarefa => tarefa.Pausar(), cancellationToken);
+    }
+
     public Task<TarefaResultado> BloquearAsync(Guid identifier, CancellationToken cancellationToken)
     {
         return AplicarAsync(identifier, tarefa => tarefa.Bloquear(), cancellationToken);

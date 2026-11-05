@@ -60,6 +60,7 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
                 ("esta_semana", ["semana"]),
                 ("proximas", ["proxima"]),
                 ("sem_prazo", ["sem-prazo"]),
+                ("concluidas", ["concluida"]),
             ],
             painel.Grupos.Select(grupo => (grupo.Grupo, grupo.Tarefas.Select(Nome).ToArray())));
 
@@ -77,9 +78,38 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
         var painel = await PainelAsync(new PainelFiltro { Empresa = (await LerEmpresaAsync(Workspaces[1].Gid)).Identifier });
 
         Assert.Equal(
-            ["retrabalho", "entrada", "atrasadas", "hoje", "esta_semana", "proximas", "sem_prazo"],
+            ["retrabalho", "entrada", "atrasadas", "hoje", "esta_semana", "proximas", "sem_prazo", "concluidas"],
             painel.Grupos.Select(grupo => grupo.Grupo));
         Assert.All(painel.Grupos, grupo => Assert.Empty(grupo.Tarefas));
+    }
+
+    [Fact]
+    public async Task FiltroPorStatusMantemTodosOsGruposSoComAsTarefasDoStatusAsync()
+    {
+        Abrir("atrasada", new DateOnly(2026, 11, 3));
+        Abrir("bloqueada", Hoje);
+        Abrir("concluida", new DateOnly(2026, 11, 5));
+        await SincronizarAsync();
+        Abrir("entrada", new DateOnly(2026, 11, 6));
+        await SincronizarAsync();
+        await ConcluirNoActumAsync(Base, "concluida");
+        await TarefasAsync(service => service.BloquearAsync(Identifier("bloqueada"), Ct));
+        var empresa = (await LerEmpresaAsync(Workspace)).Identifier;
+
+        foreach (var (status, esperadas) in new[]
+        {
+            ("em_andamento", new[] { "atrasada" }),
+            ("bloqueada", ["bloqueada"]),
+            ("entrada", ["entrada"]),
+            ("concluida", ["concluida"]),
+            ("retrabalho", []),
+        })
+        {
+            var painel = await PainelAsync(new PainelFiltro { Empresa = empresa, Status = status });
+
+            Assert.Equal(8, painel.Grupos.Count);
+            Assert.Equal(esperadas, Todas(painel).Select(Nome));
+        }
     }
 
     [Fact]
@@ -109,6 +139,27 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
         var porDescricao = Todas(await PainelAsync(new PainelFiltro { Empresa = aureum.Identifier, Busca = "notas outra" }));
         Assert.Equal(["outra"], porDescricao.Select(Nome));
         Assert.Empty(Todas(await PainelAsync(new PainelFiltro { Empresa = aureum.Identifier, Busca = "100%" })));
+    }
+
+    [Fact]
+    public async Task ConcluidasPeloActumFicamNoUltimoGrupoDaMaisRecenteParaAMaisAntigaAsync()
+    {
+        Abrir("antiga", new DateOnly(2026, 11, 1));
+        Abrir("recente", new DateOnly(2026, 11, 20));
+        Abrir("no-asana", new DateOnly(2026, 11, 5));
+        await SincronizarAsync();
+
+        await ConcluirNoActumAsync(Base, "antiga");
+        await ConcluirNoActumAsync(Base.AddDays(1), "recente");
+        Fechar("no-asana");
+        Asana.Tarefas.Remove(Gid("no-asana"));
+        await SincronizarAsync();
+
+        var painel = await PainelAsync();
+
+        Assert.Equal("concluidas", painel.Grupos[^1].Grupo);
+        Assert.Equal(["recente", "antiga"], Grupo(painel, "concluidas").Select(Nome));
+        Assert.Equal(["antiga", "recente"], Todas(painel).Select(Nome).Order());
     }
 
     [Fact]
