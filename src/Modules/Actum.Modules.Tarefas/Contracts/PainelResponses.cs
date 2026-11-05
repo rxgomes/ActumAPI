@@ -36,6 +36,12 @@ public sealed record GrupoPainelResponse(string Grupo, IReadOnlyList<CartaoTaref
 /// <param name="ComentariosNaoLidos">Number of comments not yet read</param>
 /// <param name="Bloqueada">Whether the task is blocked</param>
 /// <param name="EmAndamento">Whether the task is in progress (<c>Em andamento</c>); otherwise it is paused (<c>Pausada</c>)</param>
+/// <param name="UltimoComentarioEm">
+/// Local date and time of the most recent comment, read or not; <see langword="null"/> when the task has no comments
+/// </param>
+/// <param name="UltimoComentarioAutor">
+/// Author of the most recent comment; <see langword="null"/> when the task has no comments or the author is unknown
+/// </param>
 public sealed record CartaoTarefaResponse(
     Guid Identifier,
     string Titulo,
@@ -49,7 +55,9 @@ public sealed record CartaoTarefaResponse(
     int QuantidadeRetrabalhos,
     int ComentariosNaoLidos,
     bool Bloqueada,
-    bool EmAndamento);
+    bool EmAndamento,
+    DateTime? UltimoComentarioEm,
+    string? UltimoComentarioAutor);
 
 /// <summary>
 /// Company data shown with a task

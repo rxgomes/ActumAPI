@@ -218,6 +218,43 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
     }
 
     [Fact]
+    public async Task CartaoTrazDataEAutorDoUltimoComentarioLidoOuNaoAsync()
+    {
+        var anaEm = new DateTime(2026, 11, 3, 9, 0, 0);
+        var brunoEm = new DateTime(2026, 11, 4, 14, 30, 0);
+        var semAutorEm = new DateTime(2026, 11, 2, 16, 0, 0);
+        Abrir("com", Hoje);
+        Abrir("sem-autor", Hoje);
+        Abrir("sem", Hoje);
+        // Carga inicial: os comentários entram como lidos.
+        Historico("com", Comentario("bruno", "Bruno", "Pode subir", brunoEm));
+        Historico(
+            "sem-autor",
+            Comentario("conhecido", "Maria", "Primeiro", semAutorEm.AddHours(-1)),
+            new AsanaStory(Gid("desconhecido"), AsanaStoryTipo.Comentario, semAutorEm, null, "Sem autor"));
+        await SincronizarAsync();
+
+        // Comentário novo (não lido), mas mais antigo que o de Bruno: não muda o último. A tarefa é marcada como
+        // modificada para a sincronização ler o histórico de novo.
+        _abertas[Gid("com")] = _abertas[Gid("com")] with { ModificadaEm = new DateTime(2026, 11, 4, 15, 0, 0) };
+        Publicar();
+        Historico("com", Comentario("bruno", "Bruno", "Pode subir", brunoEm), Comentario("ana", "Ana", "Revisei", anaEm));
+        await SincronizarAsync();
+
+        var cartoes = Todas(await PainelAsync()).ToDictionary(Nome);
+        Assert.Equal(1, cartoes["com"].ComentariosNaoLidos);
+        Assert.Equal(((DateTime?)brunoEm, (string?)"Bruno"), (cartoes["com"].UltimoComentarioEm, cartoes["com"].UltimoComentarioAutor));
+        Assert.Equal(((DateTime?)semAutorEm, (string?)null), (cartoes["sem-autor"].UltimoComentarioEm, cartoes["sem-autor"].UltimoComentarioAutor));
+        Assert.Equal(((DateTime?)null, (string?)null), (cartoes["sem"].UltimoComentarioEm, cartoes["sem"].UltimoComentarioAutor));
+
+        var empresa = (await LerEmpresaAsync(Workspace)).Identifier;
+        var listagem = await PainelServiceAsync(service => service.ListarAsync(new ListarTarefasFiltro { Empresa = empresa }, Ct));
+        Assert.Equal(
+            new (string, DateTime?, string?)[] { ("com", brunoEm, "Bruno"), ("sem", null, null), ("sem-autor", semAutorEm, null) },
+            listagem.Items.Select(cartao => (Nome(cartao), cartao.UltimoComentarioEm, cartao.UltimoComentarioAutor)).OrderBy(item => item.Item1));
+    }
+
+    [Fact]
     public async Task ListagemFiltraPorStatusEPaginaComOTotalAsync()
     {
         foreach (var nome in new[] { "a", "b", "c", "d" })

@@ -206,6 +206,17 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
                    QuantidadeRetrabalhos = tarefa.Retrabalhos.Count(),
                    ComentariosNaoLidos = tarefa.Comentarios.Count(comentario => !comentario.Lido),
                    UltimaReaberturaEm = tarefa.Retrabalhos.Max(retrabalho => (DateTime?)retrabalho.ReabertaEm),
+                   // Mais recente pela data; o id desempata comentários com o mesmo horário.
+                   UltimoComentarioEm = tarefa.Comentarios
+                       .OrderByDescending(comentario => comentario.CriadoEm)
+                       .ThenByDescending(comentario => comentario.Id)
+                       .Select(comentario => (DateTime?)comentario.CriadoEm)
+                       .FirstOrDefault(),
+                   UltimoComentarioAutor = tarefa.Comentarios
+                       .OrderByDescending(comentario => comentario.CriadoEm)
+                       .ThenByDescending(comentario => comentario.Id)
+                       .Select(comentario => comentario.Autor)
+                       .FirstOrDefault(),
                    ConcluidaEm = tarefa.ConcluidaEm,
                    CreateIn = tarefa.CreateIn,
                };
@@ -318,7 +329,9 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
             linha.QuantidadeRetrabalhos,
             linha.ComentariosNaoLidos,
             linha.Status == StatusTarefa.Bloqueada,
-            linha.EmAndamento);
+            linha.EmAndamento,
+            linha.UltimoComentarioEm,
+            linha.UltimoComentarioAutor);
     }
 
     private static ComentarioResponse ParaComentario(Comentario comentario)
@@ -369,6 +382,10 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
         public int ComentariosNaoLidos { get; init; }
 
         public DateTime? UltimaReaberturaEm { get; init; }
+
+        public DateTime? UltimoComentarioEm { get; init; }
+
+        public string? UltimoComentarioAutor { get; init; }
 
         public DateTime? ConcluidaEm { get; init; }
 
