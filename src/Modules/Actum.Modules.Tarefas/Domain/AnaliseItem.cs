@@ -3,7 +3,7 @@ using Actum.Shared.Abstractions.Domain;
 namespace Actum.Modules.Tarefas.Domain;
 
 /// <summary>
-/// Checklist item or question of an analysis, markable as done (checklist) or resolved (question)
+/// Checklist item, test, question or rule of an analysis, markable as done, tested, resolved or respected
 /// </summary>
 public sealed class AnaliseItem : Entity
 {
@@ -11,7 +11,16 @@ public sealed class AnaliseItem : Entity
 
     public const int GrupoMaxLength = 100;
 
-    internal AnaliseItem(TipoItemAnalise tipo, short ordem, string texto, string? grupo, string? vago, DateTime? concluidoEm)
+    public const int OrigemMaxLength = 200;
+
+    internal AnaliseItem(
+        TipoItemAnalise tipo,
+        short ordem,
+        string texto,
+        string? grupo,
+        string? vago,
+        DateTime? concluidoEm,
+        string? origem = null)
     {
         Tipo = tipo;
         Ordem = ordem;
@@ -19,6 +28,7 @@ public sealed class AnaliseItem : Entity
         Grupo = grupo is { Length: > GrupoMaxLength } ? grupo[..GrupoMaxLength] : grupo;
         Vago = vago;
         ConcluidoEm = concluidoEm;
+        Origem = origem is { Length: > OrigemMaxLength } ? origem[..OrigemMaxLength] : origem;
     }
 
     /// <summary>
@@ -50,6 +60,12 @@ public sealed class AnaliseItem : Entity
     /// Why a checklist item is vague in the demand; <see langword="null"/> when it is clear
     /// </summary>
     public string? Vago { get; private set; }
+
+    /// <summary>
+    /// Where a rule came from (<c>descrição</c> or <c>comentário de Maria em 04/11/2026 14:30</c>);
+    /// <see langword="null"/> for the other types
+    /// </summary>
+    public string? Origem { get; private set; }
 
     /// <summary>
     /// Local date and time when the item was marked; <see langword="null"/> while not marked

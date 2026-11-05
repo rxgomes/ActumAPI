@@ -69,6 +69,7 @@ public sealed class Analise : Entity
     /// <param name="checklist">Checklist items (area, text and why it is vague, if it is), grouped, in order</param>
     /// <param name="testes">Tests, in order</param>
     /// <param name="duvidas">Questions, in order</param>
+    /// <param name="regras">Rules (text and origin), in order</param>
     /// <param name="modelo">Model that answered</param>
     /// <param name="tokensEntrada">Input tokens</param>
     /// <param name="tokensSaida">Output tokens</param>
@@ -81,6 +82,7 @@ public sealed class Analise : Entity
         IReadOnlyList<(string? Grupo, string Texto, string? Vago)> checklist,
         IReadOnlyList<string> testes,
         IReadOnlyList<string> duvidas,
+        IReadOnlyList<(string Texto, string Origem)> regras,
         string modelo,
         int tokensEntrada,
         int tokensSaida,
@@ -102,23 +104,24 @@ public sealed class Analise : Entity
             .GroupBy(item => (item.Tipo, Normalizar(item.Texto)))
             .ToDictionary(grupo => grupo.Key, grupo => grupo.First().ConcluidoEm);
 
-        analise.AdicionarItens(TipoItemAnalise.Checklist, checklist, marcados);
-        analise.AdicionarItens(TipoItemAnalise.Teste, testes.Select(texto => ((string?)null, texto, (string?)null)).ToList(), marcados);
-        analise.AdicionarItens(TipoItemAnalise.Duvida, duvidas.Select(texto => ((string?)null, texto, (string?)null)).ToList(), marcados);
+        analise.AdicionarItens(TipoItemAnalise.Checklist, checklist.Select(item => (item.Grupo, item.Texto, item.Vago, (string?)null)).ToList(), marcados);
+        analise.AdicionarItens(TipoItemAnalise.Teste, testes.Select(texto => ((string?)null, texto, (string?)null, (string?)null)).ToList(), marcados);
+        analise.AdicionarItens(TipoItemAnalise.Duvida, duvidas.Select(texto => ((string?)null, texto, (string?)null, (string?)null)).ToList(), marcados);
+        analise.AdicionarItens(TipoItemAnalise.Regra, regras.Select(regra => ((string?)null, regra.Texto, (string?)null, (string?)regra.Origem)).ToList(), marcados);
 
         return analise;
     }
 
     private void AdicionarItens(
         TipoItemAnalise tipo,
-        IReadOnlyList<(string? Grupo, string Texto, string? Vago)> itens,
+        IReadOnlyList<(string? Grupo, string Texto, string? Vago, string? Origem)> itens,
         Dictionary<(TipoItemAnalise, string), DateTime?> marcados)
     {
         for (var indice = 0; indice < itens.Count; indice++)
         {
-            var (grupo, texto, vago) = itens[indice];
+            var (grupo, texto, vago, origem) = itens[indice];
             marcados.TryGetValue((tipo, Normalizar(texto)), out var concluidoEm);
-            _itens.Add(new AnaliseItem(tipo, (short)(indice + 1), texto, grupo, vago, concluidoEm));
+            _itens.Add(new AnaliseItem(tipo, (short)(indice + 1), texto, grupo, vago, concluidoEm, origem));
         }
     }
 

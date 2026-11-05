@@ -40,6 +40,7 @@ public sealed record RetrabalhoDaDemanda(short Numero, DateTime ReabertaEm, stri
 /// <param name="Checklist">Verifiable actions, grouped by area, in execution order</param>
 /// <param name="Testes">How to validate the delivery (test cases and reference data)</param>
 /// <param name="Duvidas">Open questions to the requester</param>
+/// <param name="Regras">Business rules, constraints and suggestions to respect, each with where it came from</param>
 /// <param name="Modelo">Model that actually answered</param>
 /// <param name="TokensEntrada">Input tokens consumed</param>
 /// <param name="TokensSaida">Output tokens consumed</param>
@@ -48,6 +49,7 @@ public sealed record DemandaEstruturada(
     IReadOnlyList<ItemDoChecklist> Checklist,
     IReadOnlyList<string> Testes,
     IReadOnlyList<string> Duvidas,
+    IReadOnlyList<RegraDaDemanda> Regras,
     string Modelo,
     int TokensEntrada,
     int TokensSaida);
@@ -59,3 +61,12 @@ public sealed record DemandaEstruturada(
 /// <param name="Texto">Action to do</param>
 /// <param name="Vago">Why the action is vague in the demand; <see langword="null"/> when it is clear</param>
 public sealed record ItemDoChecklist(string Grupo, string Texto, string? Vago);
+
+/// <summary>
+/// Rule, constraint or suggestion of the demand
+/// </summary>
+/// <param name="Texto">What must be respected or considered</param>
+/// <param name="Origem">
+/// Where it came from: <c>descrição</c> or <c>comentário de &lt;autor&gt; em &lt;dd/MM/yyyy HH:mm&gt;</c>
+/// </param>
+public sealed record RegraDaDemanda(string Texto, string Origem);

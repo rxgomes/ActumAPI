@@ -182,6 +182,7 @@ internal sealed class AnaliseItemConfiguration : IEntityTypeConfiguration<Analis
             .HasConversion(new EnumSnakeCaseConverter<TipoItemAnalise>())
             .HasMaxLength(AnaliseItem.TipoMaxLength);
         builder.Property(item => item.Grupo).HasMaxLength(AnaliseItem.GrupoMaxLength);
+        builder.Property(item => item.Origem).HasMaxLength(AnaliseItem.OrigemMaxLength);
         builder.HasIndex(item => new { item.AnaliseId, item.Tipo, item.Ordem }).IsUnique();
     }
 }

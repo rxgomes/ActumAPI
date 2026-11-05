@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Actum.Modules.Asana.Application;
 using Actum.Modules.Claude.Application;
 using Actum.Modules.Claude.Contracts;
 using Actum.Modules.Tarefas.Contracts;
@@ -29,12 +30,14 @@ internal sealed class AnalisesEmAndamento
 }
 
 /// <summary>
-/// <see cref="IAnaliseService"/> over <see cref="TarefasDbContext"/> and the public <see cref="IAnalisadorDeDemanda"/>
-/// contract of the Claude module
+/// <see cref="IAnaliseService"/> over <see cref="TarefasDbContext"/>, the public <see cref="IAnalisadorDeDemanda"/>
+/// contract of the Claude module and the public <see cref="IAsanaClient"/> contract of the Asana module (to bring
+/// the comments up to date before the analysis)
 /// </summary>
 internal sealed class AnaliseService(
     TarefasDbContext context,
     IAnalisadorDeDemanda analisador,
+    IAsanaClient asana,
     AnalisesEmAndamento emAndamento,
     TimeProvider timeProvider) : IAnaliseService
 {
@@ -46,8 +49,8 @@ internal sealed class AnaliseService(
 
     public async Task<AnaliseResultado> AnalisarAsync(Guid tarefaIdentifier, CancellationToken cancellationToken)
     {
+        // Com tracking: os comentários trazidos do Asana são gravados na tarefa.
         var tarefa = await context.Set<Tarefa>()
-            .AsNoTracking()
             .Include(tarefa => tarefa.Comentarios)
             .Include(tarefa => tarefa.Retrabalhos)
             .AsSplitQuery()
@@ -69,6 +72,14 @@ internal sealed class AnaliseService(
 
         try
         {
+            // Comentários feitos no Asana depois da última sincronização entram como novidade (não lidos). Se o
+            // Asana falhar, a exceção sobe antes de chamar a IA e nada é gravado.
+            var stories = await asana.ListarStoriesAsync(tarefa.AsanaGid, cancellationToken);
+            if (tarefa.AdicionarComentarios(stories, lidos: false) > 0)
+            {
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
             var empresa = await context.Set<Empresa>()
                 .Where(empresa => empresa.Id == tarefa.EmpresaId)
                 .Select(empresa => empresa.Nome)
@@ -100,6 +111,7 @@ internal sealed class AnaliseService(
                 estruturada.Checklist.Select(item => ((string?)item.Grupo, item.Texto, item.Vago)).ToList(),
                 estruturada.Testes,
                 estruturada.Duvidas,
+                estruturada.Regras.Select(regra => (regra.Texto, regra.Origem)).ToList(),
                 estruturada.Modelo,
                 estruturada.TokensEntrada,
                 estruturada.TokensSaida,
@@ -208,6 +220,7 @@ internal sealed class AnaliseService(
             checklist,
             Itens(TipoItemAnalise.Teste),
             Itens(TipoItemAnalise.Duvida),
+            Itens(TipoItemAnalise.Regra),
             analise.Modelo,
             analise.TokensEntrada,
             analise.TokensSaida,
@@ -224,6 +237,7 @@ internal sealed class AnaliseService(
             item.Grupo,
             item.Vago,
             item.ConcluidoEm is not null,
-            item.ConcluidoEm);
+            item.ConcluidoEm,
+            item.Origem);
     }
 }

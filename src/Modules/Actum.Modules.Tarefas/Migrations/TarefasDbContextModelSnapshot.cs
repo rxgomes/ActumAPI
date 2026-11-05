@@ -139,6 +139,11 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("ordem");
 
+                    b.Property<string>("Origem")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("origem");
+
                     b.Property<string>("Texto")
                         .IsRequired()
                         .HasColumnType("text")

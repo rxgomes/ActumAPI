@@ -79,6 +79,34 @@ public sealed class AnalisadorDeDemandaTests
             resultado.Checklist);
         Assert.Equal(["Emitir a NF 2958 de Barra Mansa"], resultado.Testes);
         Assert.Equal(["Quais fluxos de pagamento?"], resultado.Duvidas);
+        Assert.Empty(resultado.Regras);
+    }
+
+    [Fact]
+    public async Task Regras_vem_com_a_origem_e_sem_itens_vazios()
+    {
+        _anthropic.ResponderMensagem(JsonSerializer.Serialize(new
+        {
+            objetivo = "Abater o IPI.",
+            checklist = Array.Empty<object>(),
+            testes = Array.Empty<string>(),
+            duvidas = Array.Empty<string>(),
+            regras = new[]
+            {
+                new { texto = " O desconto não pode passar de 10%. ", origem = " comentário de Maria em 04/11/2026 14:30 " },
+                new { texto = "Não alterar o layout da nota.", origem = "" },
+                new { texto = " ", origem = "descrição" },
+            },
+        }));
+
+        var resultado = await Criar().AnalisarAsync(Demanda, TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [
+                new RegraDaDemanda("O desconto não pode passar de 10%.", "comentário de Maria em 04/11/2026 14:30"),
+                new RegraDaDemanda("Não alterar o layout da nota.", AnalisadorDeDemanda.OrigemPadrao),
+            ],
+            resultado.Regras);
     }
 
     [Fact]
@@ -105,7 +133,7 @@ public sealed class AnalisadorDeDemandaTests
         Assert.Equal("medium", outputConfig.GetProperty("effort").GetString());
         Assert.Equal("json_schema", outputConfig.GetProperty("format").GetProperty("type").GetString());
         Assert.Equal(
-            ["objetivo", "checklist", "testes", "duvidas"],
+            ["objetivo", "checklist", "testes", "duvidas", "regras"],
             outputConfig.GetProperty("format").GetProperty("schema").GetProperty("required").EnumerateArray().Select(item => item.GetString()));
     }
 

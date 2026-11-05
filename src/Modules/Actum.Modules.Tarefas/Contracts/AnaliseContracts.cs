@@ -14,6 +14,10 @@ namespace Actum.Modules.Tarefas.Contracts;
 /// <param name="Checklist">Checklist grouped by area, groups and items in execution order</param>
 /// <param name="Testes">How to validate the delivery, in order</param>
 /// <param name="Duvidas">Questions to the requester, in order</param>
+/// <param name="Regras">
+/// Rules, constraints and suggestions to respect, in order, each with its origin; empty for versions analyzed before
+/// the rules existed
+/// </param>
 /// <param name="Modelo">Model that answered</param>
 /// <param name="TokensEntrada">Input tokens consumed</param>
 /// <param name="TokensSaida">Output tokens consumed</param>
@@ -26,6 +30,7 @@ public sealed record AnaliseResponse(
     IReadOnlyList<GrupoDoChecklistResponse> Checklist,
     IReadOnlyList<AnaliseItemResponse> Testes,
     IReadOnlyList<AnaliseItemResponse> Duvidas,
+    IReadOnlyList<AnaliseItemResponse> Regras,
     string Modelo,
     int TokensEntrada,
     int TokensSaida,
@@ -39,16 +44,20 @@ public sealed record AnaliseResponse(
 public sealed record GrupoDoChecklistResponse(string Nome, IReadOnlyList<AnaliseItemResponse> Itens);
 
 /// <summary>
-/// Checklist item, test or question of an analysis
+/// Checklist item, test, question or rule of an analysis
 /// </summary>
 /// <param name="Identifier">Item identifier</param>
-/// <param name="Tipo"><c>checklist</c>, <c>teste</c> or <c>duvida</c></param>
+/// <param name="Tipo"><c>checklist</c>, <c>teste</c>, <c>duvida</c> or <c>regra</c></param>
 /// <param name="Ordem">Position among the items of the same type, starting at 1</param>
 /// <param name="Texto">Item text</param>
-/// <param name="Grupo">Area of a checklist item; <see langword="null"/> for tests and questions</param>
+/// <param name="Grupo">Area of a checklist item; <see langword="null"/> for the other types</param>
 /// <param name="Vago">Why a checklist item is vague in the demand; <see langword="null"/> when it is clear</param>
-/// <param name="Concluido">Done (checklist), tested (test) or resolved (question)</param>
+/// <param name="Concluido">Done (checklist), tested (test), resolved (question) or respected (rule)</param>
 /// <param name="ConcluidoEm">Local date and time of the marking; <see langword="null"/> when not marked</param>
+/// <param name="Origem">
+/// Where a rule came from (<c>descrição</c> or <c>comentário de Maria em 04/11/2026 14:30</c>);
+/// <see langword="null"/> for the other types
+/// </param>
 public sealed record AnaliseItemResponse(
     Guid Identifier,
     [property: JsonConverter(typeof(SnakeCaseEnumJsonConverter<TipoItemAnalise>))] TipoItemAnalise Tipo,
@@ -57,7 +66,8 @@ public sealed record AnaliseItemResponse(
     string? Grupo,
     string? Vago,
     bool Concluido,
-    DateTime? ConcluidoEm);
+    DateTime? ConcluidoEm,
+    string? Origem);
 
 /// <summary>
 /// Marking of an analysis item

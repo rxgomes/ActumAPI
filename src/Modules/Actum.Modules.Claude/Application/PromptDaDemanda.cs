@@ -14,7 +14,7 @@ internal static class PromptDaDemanda
     public const string Sistema = """
         Você ajuda um desenvolvedor de software a organizar as demandas que ele recebe pelo Asana. A partir do
         contexto da tarefa (título, descrição, projetos, comentários e histórico de reaberturas), estruture a
-        demanda em quatro partes, sempre em português do Brasil:
+        demanda em cinco partes, sempre em português do Brasil:
 
         - objetivo: de 1 a 3 frases dizendo qual resultado é esperado quando a tarefa estiver pronta, do ponto
           de vista de quem pediu. Não repita o título.
@@ -32,20 +32,30 @@ internal static class PromptDaDemanda
         - duvidas: perguntas a fazer para quem pediu, apenas sobre lacunas, ambiguidades ou contradições reais no
           contexto, de preferência ligadas aos itens marcados como vagos. Se não houver dúvida relevante,
           devolva a lista vazia.
+        - regras: regras de negócio, restrições, padrões a seguir, cuidados e sugestões que a entrega deve
+          respeitar ou considerar, mas que não são uma ação a fazer (por exemplo, "o desconto não pode passar de
+          10%", "não alterar o layout da nota", "sugiro reaproveitar a rotina de devolução"). Não repita aqui o
+          que já está no checklist ou nos testes. Se não houver, devolva a lista vazia.
+          - texto: a regra, curta e direta.
+          - origem: de onde ela veio, exatamente "descrição" ou "comentário de <autor> em <data>", copiando o
+            autor e a data do atributo do comentário (por exemplo, "comentário de Maria em 04/11/2026 14:30").
 
-        Os comentários podem trazer pedidos de ajuste, respostas a perguntas anteriores ou decisões que mudam a
-        descrição original: o que foi combinado depois prevalece sobre o que veio antes. Ignore mensagens
-        automáticas, avisos ("vou avisar quando estiver pronto") e conversas que não alteram o que deve ser feito.
+        Considere todos os comentários: eles costumam trazer pedidos de ajuste, respostas a perguntas anteriores,
+        decisões, regras, restrições e sugestões que não estão na descrição. O que foi combinado depois prevalece
+        sobre o que veio antes. Pedidos de ação vão para o checklist, dados de referência e cenários vão para os
+        testes, e regras, restrições e sugestões vão para as regras. Ignore apenas mensagens automáticas e
+        mensagens sem conteúdo para a demanda, como agradecimentos, "ok" ou avisos de que alguém vai fazer algo.
         """;
 
     /// <summary>
-    /// JSON Schema of the structured answer (<c>objetivo</c>, <c>checklist</c>, <c>testes</c>, <c>duvidas</c>)
+    /// JSON Schema of the structured answer (<c>objetivo</c>, <c>checklist</c>, <c>testes</c>, <c>duvidas</c>,
+    /// <c>regras</c>)
     /// </summary>
     public static IReadOnlyDictionary<string, JsonElement> Esquema { get; } = new Dictionary<string, JsonElement>
     {
         ["type"] = JsonSerializer.SerializeToElement("object"),
         ["additionalProperties"] = JsonSerializer.SerializeToElement(false),
-        ["required"] = JsonSerializer.SerializeToElement(new[] { "objetivo", "checklist", "testes", "duvidas" }),
+        ["required"] = JsonSerializer.SerializeToElement(new[] { "objetivo", "checklist", "testes", "duvidas", "regras" }),
         ["properties"] = JsonSerializer.SerializeToElement(new
         {
             objetivo = new { type = "string" },
@@ -67,6 +77,21 @@ internal static class PromptDaDemanda
             },
             testes = new { type = "array", items = new { type = "string" } },
             duvidas = new { type = "array", items = new { type = "string" } },
+            regras = new
+            {
+                type = "array",
+                items = new
+                {
+                    type = "object",
+                    additionalProperties = false,
+                    required = new[] { "texto", "origem" },
+                    properties = new
+                    {
+                        texto = new { type = "string" },
+                        origem = new { type = "string" },
+                    },
+                },
+            },
         }),
     };
 
@@ -123,7 +148,10 @@ internal static class PromptDaDemanda
         texto.AppendLine(CultureInfo.InvariantCulture, $"<{nome}>{Escapar(valor)}</{nome}>");
     }
 
-    private static string Data(DateTime data) => data.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// Brazilian format, the same the AI copies into the origin of the rules
+    /// </summary>
+    private static string Data(DateTime data) => data.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
     private static string Escapar(string valor) => SecurityElement.Escape(valor) ?? string.Empty;
 }

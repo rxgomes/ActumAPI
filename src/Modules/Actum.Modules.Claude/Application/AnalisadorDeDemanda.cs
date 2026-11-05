@@ -40,6 +40,11 @@ internal sealed class AnalisadorDeDemanda(
     /// </summary>
     public const string GrupoPadrao = "Geral";
 
+    /// <summary>
+    /// Origin of a rule that came without one
+    /// </summary>
+    public const string OrigemPadrao = "origem não informada";
+
     private static readonly JsonSerializerOptions OpcoesJson = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -138,11 +143,20 @@ internal sealed class AnalisadorDeDemanda(
                 string.IsNullOrWhiteSpace(item.Vago) ? null : item.Vago.Trim()))
             .ToList();
 
+        // Regras são opcionais na leitura: uma resposta sem a lista vale como "sem regras".
+        var regras = (conteudo.Regras ?? [])
+            .Where(regra => regra is not null && !string.IsNullOrWhiteSpace(regra.Texto))
+            .Select(regra => new RegraDaDemanda(
+                regra!.Texto!.Trim(),
+                string.IsNullOrWhiteSpace(regra.Origem) ? OrigemPadrao : regra.Origem.Trim()))
+            .ToList();
+
         return new DemandaEstruturada(
             objetivo,
             checklist,
             Limpar(conteudo.Testes),
             Limpar(conteudo.Duvidas),
+            regras,
             resposta.Model.Raw(),
             (int)resposta.Usage.InputTokens,
             (int)resposta.Usage.OutputTokens);
@@ -220,6 +234,18 @@ internal sealed class AnalisadorDeDemanda(
 
         [JsonPropertyName("duvidas")]
         public List<string?>? Duvidas { get; init; }
+
+        [JsonPropertyName("regras")]
+        public List<RegraJson?>? Regras { get; init; }
+    }
+
+    private sealed class RegraJson
+    {
+        [JsonPropertyName("texto")]
+        public string? Texto { get; init; }
+
+        [JsonPropertyName("origem")]
+        public string? Origem { get; init; }
     }
 
     private sealed class ItemJson

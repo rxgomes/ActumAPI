@@ -74,6 +74,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task AnaliseCriadaRetorna201ComOsItensEmCamelCaseAsync()
     {
+        ResponderHistorico();
         ResponderEstruturado("Abater o IPI devolvido.", ["Ajustar cálculo"], ["Vale para notas antigas?"]);
 
         var (status, corpo, _) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
@@ -92,6 +93,8 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal("checklist", item.GetProperty("tipo").GetString());
         Assert.False(item.GetProperty("concluido").GetBoolean());
         Assert.Equal("duvida", Assert.Single(corpo.GetProperty("duvidas").EnumerateArray()).GetProperty("tipo").GetString());
+        Assert.Empty(corpo.GetProperty("regras").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("origem").ValueKind);
         Assert.Equal(1200, corpo.GetProperty("tokensEntrada").GetInt32());
 
         var lista = await EnviarAsync(HttpMethod.Get, $"/tarefas/{_tarefa}/analises", null);
@@ -102,17 +105,20 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task ChaveAusenteRetorna400SemChamarAAnthropicAsync()
     {
+        // Os comentários são atualizados pelo Asana antes da IA; a Anthropic não é chamada.
+        ResponderHistorico();
         var (status, corpo, tipo) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null, chave: string.Empty);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Equal(ProblemJson, tipo);
         Assert.Contains("dotnet user-secrets set \"Claude:ApiKey\"", corpo.GetProperty("detail").GetString());
-        Assert.Empty(_anthropic.Requisicoes);
+        Assert.DoesNotContain(_anthropic.Requisicoes, requisicao => requisicao.Uri.Host == "api.anthropic.com");
     }
 
     [Fact]
     public async Task ChaveRecusadaRetorna400Async()
     {
+        ResponderHistorico();
         _anthropic.Responder(HttpStatusCode.Unauthorized, new { type = "error", error = new { type = "authentication_error", message = "invalid x-api-key" } });
 
         var (status, corpo, tipo) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
@@ -126,6 +132,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task ContaSemCreditoRetorna400ComOrientacaoAsync()
     {
+        ResponderHistorico();
         _anthropic.Responder(HttpStatusCode.BadRequest, new
         {
             type = "error",
@@ -144,6 +151,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task RecusaDoModeloRetorna400Async()
     {
+        ResponderHistorico();
         ResponderMensagem(string.Empty, "refusal");
 
         var (status, corpo, _) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
@@ -155,6 +163,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SobrecargaRetorna502SemGravarAnaliseAsync()
     {
+        ResponderHistorico();
         _anthropic.Responder((HttpStatusCode)529, new { type = "error", error = new { type = "overloaded_error", message = "Overloaded" } });
 
         var (status, corpo, tipo) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
@@ -168,6 +177,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task RespostaTruncadaRetorna502Async()
     {
+        ResponderHistorico();
         ResponderMensagem("{\"objetivo\": \"Aba", "max_tokens");
 
         var (status, corpo, _) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
@@ -203,6 +213,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task MarcacaoDeItemDaAnaliseAtualAsync()
     {
+        ResponderHistorico();
         ResponderEstruturado("Objetivo", ["Item"], []);
         var analise = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
         var item = analise.Corpo.GetProperty("checklist")[0].GetProperty("itens")[0].GetProperty("identifier").GetGuid();
@@ -225,6 +236,15 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
                 duvidas,
             }),
             "end_turn");
+    }
+
+    /// <summary>
+    /// Enfileira a resposta do Asana ao histórico da tarefa, lido pela análise antes de chamar a IA (o handler
+    /// atende Asana e Anthropic em fila)
+    /// </summary>
+    private void ResponderHistorico(params object[] stories)
+    {
+        _anthropic.Responder(HttpStatusCode.OK, new { data = stories, next_page = (object?)null });
     }
 
     private void ResponderMensagem(string texto, string stopReason)
@@ -253,6 +273,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
         {
             ["Claude:ApiKey"] = chave,
             ["Claude:NovasTentativas"] = "0",
+            ["Asana:Token"] = "token-de-teste",
         };
         await using var factory = new ActumApiFactory(Environments.Production, postgres.ConnectionString, settings, asana: _anthropic);
         using var cliente = factory.CreateClient();
