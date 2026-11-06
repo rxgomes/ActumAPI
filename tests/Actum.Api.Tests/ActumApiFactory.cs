@@ -1,4 +1,5 @@
 using Actum.Modules.Asana.Tests;
+using Actum.Modules.GitHub.Application;
 using Actum.Shared.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -10,15 +11,17 @@ namespace Actum.Api.Tests;
 
 /// <summary>
 /// Sobe a API em memória com o ambiente, a connection string e as configurações extras informados.
-/// Inclui os endpoints de <see cref="EndpointsDeTeste"/>. As chamadas ao Asana vão para <paramref name="asana"/>
-/// (por padrão, um handler sem respostas): nenhum teste acessa o Asana real.
+/// Inclui os endpoints de <see cref="EndpointsDeTeste"/>. As chamadas ao Asana (e a qualquer serviço HTTP) vão para
+/// <paramref name="asana"/> (por padrão, um handler sem respostas): nenhum teste acessa o Asana nem o GitHub reais.
+/// Com <paramref name="gitHub"/>, o cliente do GitHub é trocado pelo informado.
 /// </summary>
 public sealed class ActumApiFactory(
     string environment,
     string connectionString,
     IReadOnlyDictionary<string, string>? settings = null,
     ColetorDeLogs? logs = null,
-    HttpMessageHandlerFalso? asana = null) : WebApplicationFactory<Program>
+    HttpMessageHandlerFalso? asana = null,
+    IGitHubClient? gitHub = null) : WebApplicationFactory<Program>
 {
     /// <summary>
     /// Connection string para uma porta sem servidor, para simular o banco inacessível.
@@ -43,6 +46,11 @@ public sealed class ActumApiFactory(
 
             var handlerDoAsana = asana ?? new HttpMessageHandlerFalso();
             services.ConfigureHttpClientDefaults(cliente => cliente.ConfigurePrimaryHttpMessageHandler(() => handlerDoAsana));
+
+            if (gitHub is not null)
+            {
+                services.AddSingleton(gitHub);
+            }
         });
 
         if (logs is not null)

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Actum.Modules.GitHub\Actum.Modules.GitHub.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Testes sem banco: o PostgresFixture compartilhado depende do Npgsql. -->
+    <Compile Remove="$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'Shared'))**\*.cs" />
+  </ItemGroup>
+
+</Project>

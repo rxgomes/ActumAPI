@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="..\Actum.Modules.Asana.Tests\HttpMessageHandlerFalso.cs" Link="Asana\HttpMessageHandlerFalso.cs" />
+    <Compile Include="..\Actum.Modules.Tarefas.Tests\GitHubClientFalso.cs" Link="GitHub\GitHubClientFalso.cs" />
   </ItemGroup>
 
 </Project>

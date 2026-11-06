@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Actum.Shared.Abstractions\Actum.Shared.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Actum.Modules.GitHub.Tests" />
+  </ItemGroup>
+
+</Project>

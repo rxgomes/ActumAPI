@@ -49,6 +49,14 @@ internal static class TarefaCiclo
             ? tarefa.Retrabalhos.FirstOrDefault(r => r.Id == retrabalhoId)
             : null;
 
-        return new BranchResponse(branch.Identifier, branch.Tipo, branch.Nome, branch.Enviada, branch.EnviadaAsanaEm, retrabalho?.Numero);
+        return new BranchResponse(
+            branch.Identifier,
+            branch.Tipo,
+            branch.Nome,
+            branch.Enviada,
+            branch.EnviadaAsanaEm,
+            retrabalho?.Numero,
+            branch.Partes,
+            branch.Tag);
     }
 }

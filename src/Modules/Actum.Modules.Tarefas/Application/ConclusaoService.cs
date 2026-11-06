@@ -28,7 +28,7 @@ internal sealed class ConclusaoService(
         }
 
         var motivo = tarefa.MotivoParaNaoConcluir();
-        var tags = tarefa.BranchesPendentes.Select(branch => branch.Nome).ToList();
+        var tags = tarefa.BranchesPendentes.Select(branch => branch.Tag).ToList();
 
         return new ConclusaoPreviaResponse(motivo is null, motivo, tags);
     }
@@ -57,14 +57,14 @@ internal sealed class ConclusaoService(
 
         foreach (var branch in tarefa.BranchesPendentes)
         {
-            var tagNaTarefa = remota.Tags.FirstOrDefault(tag => string.Equals(tag.Nome, branch.Nome, StringComparison.Ordinal));
+            var tagNaTarefa = remota.Tags.FirstOrDefault(tag => string.Equals(tag.Nome, branch.Tag, StringComparison.Ordinal));
             if (tagNaTarefa is not null)
             {
                 branch.MarcarEnviada(tagNaTarefa.Gid, DateTime.Now);
             }
             else
             {
-                var tag = await asana.ObterOuCriarTagAsync(workspaceGid, branch.Nome, cancellationToken);
+                var tag = await asana.ObterOuCriarTagAsync(workspaceGid, branch.Tag, cancellationToken);
                 await asana.AdicionarTagAsync(tarefa.AsanaGid, tag.Gid, cancellationToken);
                 branch.MarcarEnviada(tag.Gid, DateTime.Now);
             }

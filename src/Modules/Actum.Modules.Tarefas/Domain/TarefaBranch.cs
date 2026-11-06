@@ -3,7 +3,7 @@ using Actum.Shared.Abstractions.Domain;
 namespace Actum.Modules.Tarefas.Domain;
 
 /// <summary>
-/// Git branch of a task. On completion it becomes an Asana tag with exactly the same name.
+/// Git branch of a task. On completion it becomes an Asana tag with the text of <see cref="Tag"/>.
 /// </summary>
 public sealed class TarefaBranch : Entity
 {
@@ -13,11 +13,69 @@ public sealed class TarefaBranch : Entity
 
     public const int GidMaxLength = 50;
 
-    internal TarefaBranch(TipoBranch tipo, string nome, long? retrabalhoId)
+    /// <summary>
+    /// Used by the EF Core when reading; the parts are filled by their properties
+    /// </summary>
+    private TarefaBranch(TipoBranch tipo, string nome, long? retrabalhoId)
     {
         Tipo = tipo;
         Nome = nome;
         RetrabalhoId = retrabalhoId;
+    }
+
+    internal TarefaBranch(TipoBranch tipo, string nome, long? retrabalhoId, IEnumerable<ParteBranch> partes)
+        : this(tipo, nome, retrabalhoId)
+    {
+        var conjunto = partes.ToHashSet();
+        ParteFront = conjunto.Contains(ParteBranch.Front);
+        ParteBack = conjunto.Contains(ParteBranch.Back);
+    }
+
+    /// <summary>
+    /// Whether the branch belongs to the front-end
+    /// </summary>
+    public bool ParteFront { get; private set; }
+
+    /// <summary>
+    /// Whether the branch belongs to the back-end
+    /// </summary>
+    public bool ParteBack { get; private set; }
+
+    /// <summary>
+    /// Parts of the branch, in the order front, back; empty for branches registered before the parts existed
+    /// </summary>
+    public IReadOnlyList<ParteBranch> Partes
+    {
+        get
+        {
+            var partes = new List<ParteBranch>(2);
+            if (ParteFront)
+            {
+                partes.Add(ParteBranch.Front);
+            }
+
+            if (ParteBack)
+            {
+                partes.Add(ParteBranch.Back);
+            }
+
+            return partes;
+        }
+    }
+
+    /// <summary>
+    /// Text of the Asana tag: <c>(Front, Back) => nome</c>, <c>(Front) => nome</c> or <c>(Back) => nome</c>;
+    /// just the name when the branch has no parts
+    /// </summary>
+    public string Tag
+    {
+        get
+        {
+            var partes = Partes;
+            return partes.Count == 0
+                ? Nome
+                : $"({string.Join(", ", partes.Select(parte => parte.ToString()))}) => {Nome}";
+        }
     }
 
     /// <summary>
@@ -31,7 +89,7 @@ public sealed class TarefaBranch : Entity
     public TipoBranch Tipo { get; private set; }
 
     /// <summary>
-    /// Branch name, without spaces at the ends; also the tag name in the Asana
+    /// Branch name, without spaces at the ends
     /// </summary>
     public string Nome { get; private set; }
 

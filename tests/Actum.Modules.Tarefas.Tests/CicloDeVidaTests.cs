@@ -1,5 +1,6 @@
 using Actum.Modules.Asana.Contracts;
 using Actum.Modules.Asana.Errors;
+using Actum.Modules.GitHub.Errors;
 using Actum.Modules.Tarefas.Application;
 using Actum.Modules.Tarefas.Contracts;
 using Actum.Modules.Tarefas.Domain;
@@ -11,8 +12,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Actum.Modules.Tarefas.Tests;
 
 /// <summary>
-/// Cenários da capability <c>task-lifecycle</c> e os de <c>rework-tracking</c> desta change, com o Asana simulado.
-/// As tarefas são criadas pela sincronização, como no uso real.
+/// Cenários da capability <c>task-lifecycle</c> e os de <c>rework-tracking</c> desta change, com o Asana e o GitHub
+/// simulados. As tarefas são criadas pela sincronização, como no uso real.
 /// </summary>
 [Collection(SincronizacaoCollection.Nome)]
 public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTestBase(postgres, "Aureum-ERP")
@@ -25,17 +26,50 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
 
     private const string Fix = "fix/ipi-devolvido-pagamento";
 
+    private const string NovaImplementacao = "261106-ajuste-ipi";
+
+    private const string Release = "release/2026-11";
+
+    private const string RepositorioFront = "ixact/erp-web";
+
+    private const string RepositorioBack = "ixact/erp-api";
+
+    private const string ShaFront = "sha-front";
+
+    private const string ShaBack = "sha-back";
+
+    private const string TagMain = $"(Front, Back) => {Main}";
+
+    private const string TagFeature = $"(Front, Back) => {Feature}";
+
+    private const string TagFix = $"(Front) => {Fix}";
+
     private static readonly DateOnly Prazo = new(2026, 11, 10);
 
+    private static readonly IReadOnlyList<ParteBranch> FrontEBack = [ParteBranch.Front, ParteBranch.Back];
+
+    private readonly GitHubClientFalso _gitHub = new GitHubClientFalso()
+        .ComBranch(RepositorioFront, Main, ShaFront)
+        .ComBranch(RepositorioBack, Main, ShaBack);
+
     [Fact]
-    public async Task InicioValidoRegistraBranchesSemChamarOAsanaAsync()
+    public async Task InicioValidoCriaABranchNosRepositoriosERegistraAsBranchesSemChamarOAsanaAsync()
     {
         var tarefa = await NaEntradaAsync();
         LimparChamadas();
 
-        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest($"  {Main} ", Feature, Prazo), Ct));
+        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest($"  {Main} ", Feature, Prazo, [ParteBranch.Back, ParteBranch.Front]), Ct));
 
         Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
+        Assert.Equal(
+            [
+                $"sha:{RepositorioFront}:{Main}",
+                $"sha:{RepositorioBack}:{Main}",
+                $"criar:{RepositorioFront}:{Feature}:{ShaFront}",
+                $"criar:{RepositorioBack}:{Feature}:{ShaBack}",
+            ],
+            _gitHub.Chamadas);
+
         var lida = await LerTarefaAsync(Nome);
         Assert.Equal(StatusTarefa.EmAndamento, lida!.Status);
         Assert.Equal(Prazo, lida.PrazoInterno);
@@ -43,19 +77,131 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
             [(TipoBranch.Base, Main, false), (TipoBranch.Implementacao, Feature, false)],
             lida.Branches.OrderBy(b => b.Tipo).Select(b => (b.Tipo, b.Nome, b.Enviada)));
         Assert.All(lida.Branches, branch => Assert.Null(branch.RetrabalhoId));
+        Assert.All(lida.Branches, branch => Assert.Equal(FrontEBack, branch.Partes));
+        Assert.Equal([TagMain, TagFeature], resultado.Tarefa!.Branches.Select(b => b.Tag));
+        Assert.Equal([FrontEBack, FrontEBack], resultado.Tarefa.Branches.Select(b => b.Partes));
         AssertNenhumaChamadaAoAsana();
     }
 
     [Fact]
-    public async Task InicioComBranchesIguaisERejeitadoAsync()
+    public async Task InicioComUmaParteSoCriaNoRepositorioDelaAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+
+        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, [ParteBranch.Back]), Ct));
+
+        Assert.Equal([$"sha:{RepositorioBack}:{Main}", $"criar:{RepositorioBack}:{Feature}:{ShaBack}"], _gitHub.Chamadas);
+        Assert.Equal([$"(Back) => {Main}", $"(Back) => {Feature}"], resultado.Tarefa!.Branches.Select(b => b.Tag));
+        Assert.All((await LerTarefaAsync(Nome))!.Branches, branch => Assert.Equal((false, true), (branch.ParteFront, branch.ParteBack)));
+    }
+
+    [Fact]
+    public async Task InicioAceitaBranchDeImplementacaoJaExistenteNoRepositorioAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+        _gitHub.ComBranch(RepositorioBack, Feature, "sha-antigo");
+
+        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct));
+
+        Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
+        Assert.Equal("sha-antigo", _gitHub.Repositorios[RepositorioBack][Feature]);
+        Assert.Equal(ShaFront, _gitHub.Repositorios[RepositorioFront][Feature]);
+    }
+
+    [Fact]
+    public async Task InicioComBaseInexistenteNaoCriaNadaENaoIniciaAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+        _gitHub.ComBranch(RepositorioFront, "release/2026-12", ShaFront);
+
+        var erro = await Assert.ThrowsAsync<DomainException>(
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest("release/2026-12", Feature, Prazo, FrontEBack), Ct)));
+
+        Assert.Equal($"A branch base 'release/2026-12' não existe no repositório de back ({RepositorioBack}).", erro.Message);
+        Assert.DoesNotContain(_gitHub.Chamadas, chamada => chamada.StartsWith("criar:", StringComparison.Ordinal));
+        var lida = await LerTarefaAsync(Nome);
+        Assert.Equal(StatusTarefa.Entrada, lida!.Status);
+        Assert.Empty(lida.Branches);
+    }
+
+    [Fact]
+    public async Task InicioComParteSemRepositorioNaoChamaOGitHubAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+        await DefinirRepositoriosAsync(Workspace, null, RepositorioBack);
+
+        var erro = await Assert.ThrowsAsync<DomainException>(
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct)));
+
+        Assert.Equal("A empresa Aureum-ERP não tem repositório de front no GitHub. Cadastre-o na página Empresas.", erro.Message);
+        Assert.Empty(_gitHub.Chamadas);
+        Assert.Equal(StatusTarefa.Entrada, (await LerTarefaAsync(Nome))!.Status);
+    }
+
+    [Fact]
+    public async Task FalhaDoGitHubNoSegundoRepositorioNaoIniciaENovaTentativaAceitaAJaCriadaAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+        _gitHub.FalharNaCriacaoEm = RepositorioBack;
+
+        await Assert.ThrowsAsync<GitHubIndisponivelException>(
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct)));
+
+        var aposFalha = await LerTarefaAsync(Nome);
+        Assert.Equal(StatusTarefa.Entrada, aposFalha!.Status);
+        Assert.Empty(aposFalha.Branches);
+        Assert.True(_gitHub.Repositorios[RepositorioFront].ContainsKey(Feature));
+
+        _gitHub.FalharNaCriacaoEm = null;
+        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct));
+
+        Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
+        Assert.True(_gitHub.Repositorios[RepositorioBack].ContainsKey(Feature));
+        Assert.Equal(StatusTarefa.EmAndamento, (await LerTarefaAsync(Nome))!.Status);
+    }
+
+    [Fact]
+    public async Task InicioComBranchesIguaisERejeitadoSemChamarOGitHubAsync()
     {
         var tarefa = await NaEntradaAsync();
 
         var erro = await Assert.ThrowsAsync<DomainException>(
-            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, $" {Main}", Prazo), Ct)));
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, $" {Main}", Prazo, FrontEBack), Ct)));
 
         Assert.Equal("A branch base e a branch de implementação devem ser diferentes.", erro.Message);
         Assert.Equal(StatusTarefa.Entrada, (await LerTarefaAsync(Nome))!.Status);
+        Assert.Empty(_gitHub.Chamadas);
+    }
+
+    [Fact]
+    public async Task InicioSemPartesERejeitadoSemChamarOGitHubAsync()
+    {
+        var tarefa = await NaEntradaAsync();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, []), Ct)));
+
+        Assert.Equal("Informe se a branch é do front, do back ou dos dois.", erro.Message);
+        Assert.Empty(_gitHub.Chamadas);
+    }
+
+    [Theory]
+    [InlineData("consumidor final nf")]
+    [InlineData("feature:nf")]
+    [InlineData("feature..nf")]
+    [InlineData("feature/nf.lock")]
+    [InlineData("-feature")]
+    [InlineData("feature/")]
+    [InlineData("nf@{1}")]
+    public async Task NomeInvalidoNoGitERejeitadoSemChamarOGitHubAsync(string nome)
+    {
+        var tarefa = await NaEntradaAsync();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, nome, Prazo, FrontEBack), Ct)));
+
+        Assert.StartsWith($"O nome da branch '{nome}' não é válido no Git", erro.Message);
+        Assert.Empty(_gitHub.Chamadas);
     }
 
     [Fact]
@@ -64,9 +210,10 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         var tarefa = await NaCargaInicialAsync();
 
         var erro = await Assert.ThrowsAsync<DomainException>(
-            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo), Ct)));
+            () => TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct)));
 
         Assert.Contains("Status atual: em andamento", erro.Message);
+        Assert.Empty(_gitHub.Chamadas);
     }
 
     [Fact]
@@ -137,26 +284,35 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     }
 
     [Fact]
-    public async Task TarefaDaCargaInicialRecebeAsDuasBranchesAsync()
+    public async Task TarefaDaCargaInicialRecebeAsDuasBranchesConferindoABaseECriandoAImplementacaoAsync()
     {
         var tarefa = await NaCargaInicialAsync();
 
-        await AdicionarBranchAsync(tarefa, TipoBranch.Base, Main);
-        var resultado = await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Feature);
+        await AdicionarBranchAsync(tarefa, TipoBranch.Base, Main, [ParteBranch.Back]);
+        Assert.Equal([$"sha:{RepositorioBack}:{Main}"], _gitHub.Chamadas);
+
+        var resultado = await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Feature, [ParteBranch.Back]);
 
         Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
         Assert.Equal((TipoBranch.Implementacao, Feature, false, (short?)null), (resultado.Branch!.Tipo, resultado.Branch.Nome, resultado.Branch.Enviada, resultado.Branch.RetrabalhoNumero));
+        Assert.Equal($"(Back) => {Feature}", resultado.Branch.Tag);
+        Assert.Equal(
+            [$"sha:{RepositorioBack}:{Main}", $"sha:{RepositorioBack}:{Main}", $"criar:{RepositorioBack}:{Feature}:{ShaBack}"],
+            _gitHub.Chamadas);
         Assert.Equal([Main, Feature], (await LerTarefaAsync(Nome))!.Branches.OrderBy(b => b.Tipo).Select(b => b.Nome));
     }
 
     [Fact]
-    public async Task NovaBranchNoRetrabalhoFicaVinculadaAoRetrabalhoAbertoAsync()
+    public async Task NovaBranchNoRetrabalhoECriadaAPartirDaBaseEFicaVinculadaAoRetrabalhoAbertoAsync()
     {
         var tarefa = await EmRetrabalhoAsync();
+        _gitHub.Chamadas.Clear();
 
-        var resultado = await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Fix);
+        var resultado = await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Fix, [ParteBranch.Front]);
 
+        Assert.Equal([$"sha:{RepositorioFront}:{Main}", $"criar:{RepositorioFront}:{Fix}:{ShaFront}"], _gitHub.Chamadas);
         Assert.Equal((short?)1, resultado.Branch!.RetrabalhoNumero);
+        Assert.Equal([ParteBranch.Front], resultado.Branch.Partes);
         var lida = await LerTarefaAsync(Nome);
         var retrabalho = Assert.Single(lida!.Retrabalhos);
         Assert.Equal(retrabalho.Id, lida.Branches.Single(b => b.Nome == Fix).RetrabalhoId);
@@ -164,14 +320,38 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     }
 
     [Fact]
-    public async Task BranchComNomeRepetidoEConflitoAsync()
+    public async Task ImplementacaoSemBaseERejeitadaSemChamarOGitHubAsync()
+    {
+        var tarefa = await NaCargaInicialAsync();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(() => AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Feature));
+
+        Assert.Equal("Registre a branch base antes da branch de implementação.", erro.Message);
+        Assert.Empty(_gitHub.Chamadas);
+    }
+
+    [Fact]
+    public async Task BaseInexistenteNoRegistroNaoERegistradaAsync()
+    {
+        var tarefa = await NaCargaInicialAsync();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(() => AdicionarBranchAsync(tarefa, TipoBranch.Base, "develop"));
+
+        Assert.Equal($"A branch base 'develop' não existe no repositório de front ({RepositorioFront}).", erro.Message);
+        Assert.Empty((await LerTarefaAsync(Nome))!.Branches);
+    }
+
+    [Fact]
+    public async Task BranchComNomeRepetidoEConflitoSemChamarOGitHubAsync()
     {
         var tarefa = await IniciadaAsync();
+        _gitHub.Chamadas.Clear();
 
         var resultado = await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, $" {Feature} ");
 
         Assert.Equal(TarefaResultadoStatus.BranchRepetida, resultado.Status);
         Assert.Equal(2, (await LerTarefaAsync(Nome))!.Branches.Count);
+        Assert.Empty(_gitHub.Chamadas);
     }
 
     [Fact]
@@ -214,12 +394,12 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
 
         Assert.False(previa!.Permitida);
         Assert.Equal("Informe a branch de implementação antes de concluir.", previa.Motivo);
-        Assert.Equal([Main], previa.Tags);
+        Assert.Equal([TagMain], previa.Tags);
         AssertNenhumaChamadaAoAsana();
     }
 
     [Fact]
-    public async Task PreviaListaAsTagsPendentesNaOrdemDeEnvioAsync()
+    public async Task PreviaListaAsTagsPendentesComAsPartesNaOrdemDeEnvioAsync()
     {
         var tarefa = await IniciadaAsync();
 
@@ -227,11 +407,11 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
 
         Assert.True(previa!.Permitida);
         Assert.Null(previa.Motivo);
-        Assert.Equal([Main, Feature], previa.Tags);
+        Assert.Equal([TagMain, TagFeature], previa.Tags);
     }
 
     [Fact]
-    public async Task PrimeiraConclusaoAdicionaAsTagsEConcluiNoAsanaENoActumAsync()
+    public async Task PrimeiraConclusaoAdicionaAsTagsComAsPartesEConcluiNoAsanaENoActumAsync()
     {
         var tarefa = await IniciadaAsync();
         LimparChamadas();
@@ -239,10 +419,10 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
 
         var resultado = await ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct));
 
-        Assert.Equal([$"tag:{Main}", $"addTag:{Main}", $"tag:{Feature}", $"addTag:{Feature}", "concluir"], Asana.Escritas);
+        Assert.Equal([$"tag:{TagMain}", $"addTag:{TagMain}", $"tag:{TagFeature}", $"addTag:{TagFeature}", "concluir"], Asana.Escritas);
         var remota = Asana.Tarefas[Gid(Nome)];
         Assert.True(remota.Concluida);
-        Assert.Equal([Main, Feature], remota.Tags.Select(tag => tag.Nome));
+        Assert.Equal([TagMain, TagFeature], remota.Tags.Select(tag => tag.Nome));
 
         Assert.Equal(StatusTarefa.Concluida, resultado.Tarefa!.Status);
         var lida = await LerTarefaAsync(Nome);
@@ -251,6 +431,25 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         Assert.True(lida.ConcluidaEm >= antes.AddMilliseconds(-1));
         Assert.All(lida.Branches, branch => Assert.True(branch.Enviada));
         Assert.Equal(remota.Tags.Select(tag => tag.Gid), lida.Branches.OrderBy(b => b.Tipo).Select(b => b.AsanaTagGid));
+    }
+
+    [Fact]
+    public async Task BranchesSemPartesUsamONomeComoTagAsync()
+    {
+        var tarefa = await IniciadaAsync();
+        await RemoverPartesAsync();
+        LimparChamadas();
+
+        // A resposta das ações (mesmo mapeamento do detalhe) devolve as branches antigas sem partes e com a tag igual ao nome.
+        var pausada = await TarefasAsync(service => service.PausarAsync(tarefa, Ct));
+        Assert.All(pausada.Tarefa!.Branches, branch => Assert.Empty(branch.Partes));
+        Assert.Equal([Main, Feature], pausada.Tarefa.Branches.Select(b => b.Tag));
+
+        var previa = await ConclusaoAsync(service => service.ObterPreviaAsync(tarefa, Ct));
+        Assert.Equal([Main, Feature], previa!.Tags);
+
+        await ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct));
+        Assert.Equal([$"tag:{Main}", $"addTag:{Main}", $"tag:{Feature}", $"addTag:{Feature}", "concluir"], Asana.Escritas);
     }
 
     [Fact]
@@ -269,26 +468,27 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     public async Task RetrabalhoComBranchNovaSoAdicionaANovaEMantemAsAnterioresAsync()
     {
         var tarefa = await EmRetrabalhoAsync();
-        await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Fix);
+        await AdicionarBranchAsync(tarefa, TipoBranch.Implementacao, Fix, [ParteBranch.Front]);
         LimparChamadas();
 
         await ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct));
 
-        Assert.Equal([$"tag:{Fix}", $"addTag:{Fix}", "concluir"], Asana.Escritas);
-        Assert.Equal([Main, Feature, Fix], Asana.Tarefas[Gid(Nome)].Tags.Select(tag => tag.Nome));
+        Assert.Equal([$"tag:{TagFix}", $"addTag:{TagFix}", "concluir"], Asana.Escritas);
+        Assert.Equal([TagMain, TagFeature, TagFix], Asana.Tarefas[Gid(Nome)].Tags.Select(tag => tag.Nome));
     }
 
     [Fact]
     public async Task TagJaPresenteNaTarefaNaoEAdicionadaDeNovoAsync()
     {
         var tarefa = await IniciadaAsync();
-        var tagExistente = new AsanaTag("tag-existente", Main);
-        Asana.Tarefas[Gid(Nome)] = Asana.Tarefas[Gid(Nome)] with { Tags = [tagExistente] };
+        var tagExistente = new AsanaTag("tag-existente", TagMain);
+        Asana.Tarefas[Gid(Nome)] = Asana.Tarefas[Gid(Nome)] with { Tags = [tagExistente, new AsanaTag("so-o-nome", Feature)] };
         LimparChamadas();
 
         await ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct));
 
-        Assert.Equal([$"tag:{Feature}", $"addTag:{Feature}", "concluir"], Asana.Escritas);
+        // A comparação é pelo texto completo da tag: uma tag só com o nome da branch não conta.
+        Assert.Equal([$"tag:{TagFeature}", $"addTag:{TagFeature}", "concluir"], Asana.Escritas);
         var main = (await LerTarefaAsync(Nome))!.Branches.Single(b => b.Nome == Main);
         Assert.True(main.Enviada);
         Assert.Equal("tag-existente", main.AsanaTagGid);
@@ -299,7 +499,7 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     {
         var tarefa = await IniciadaAsync();
         LimparChamadas();
-        Asana.FalharNaEscrita = $"addTag:{Feature}";
+        Asana.FalharNaEscrita = $"addTag:{TagFeature}";
 
         await Assert.ThrowsAsync<AsanaIndisponivelException>(() => ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct)));
 
@@ -314,8 +514,8 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         LimparChamadas();
         await ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct));
 
-        Assert.Equal([$"tag:{Feature}", $"addTag:{Feature}", "concluir"], Asana.Escritas);
-        Assert.Equal([Main, Feature], Asana.Tarefas[Gid(Nome)].Tags.Select(tag => tag.Nome));
+        Assert.Equal([$"tag:{TagFeature}", $"addTag:{TagFeature}", "concluir"], Asana.Escritas);
+        Assert.Equal([TagMain, TagFeature], Asana.Tarefas[Gid(Nome)].Tags.Select(tag => tag.Nome));
         Assert.Equal(StatusTarefa.Concluida, (await LerTarefaAsync(Nome))!.Status);
     }
 
@@ -355,8 +555,11 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         var identifier = Guid.CreateVersion7();
 
         Assert.Equal(TarefaResultadoStatus.NaoEncontrada, (await TarefasAsync(service => service.BloquearAsync(identifier, Ct))).Status);
+        Assert.Equal(TarefaResultadoStatus.NaoEncontrada, (await TarefasAsync(service => service.IniciarAsync(identifier, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct))).Status);
         Assert.Equal(TarefaResultadoStatus.NaoEncontrada, (await ConclusaoAsync(service => service.ConcluirAsync(identifier, Ct))).Status);
         Assert.Null(await ConclusaoAsync(service => service.ObterPreviaAsync(identifier, Ct)));
+        Assert.Null(await TarefasAsync(service => service.ListarBasesRecentesAsync(identifier, Ct)));
+        Assert.Empty(_gitHub.Chamadas);
     }
 
     [Fact]
@@ -390,11 +593,11 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         var erroAoPausar = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.PausarAsync(tarefa, Ct)));
         Assert.Equal("Só é possível pausar uma tarefa em andamento.", erroAoPausar.Message);
 
-        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, Ct));
+        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct));
         Assert.True(retomada.Tarefa!.EmAndamento);
         Assert.True((await LerTarefaAsync(Nome))!.EmAndamento);
 
-        var erroAoRetomar = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, Ct)));
+        var erroAoRetomar = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct)));
         Assert.Equal("A tarefa já está em andamento.", erroAoRetomar.Message);
         AssertNenhumaChamadaAoAsana();
     }
@@ -406,7 +609,7 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
 
         var lida = await LerTarefaAsync(Nome);
         Assert.Equal((StatusTarefa.EmAndamento, false), (lida!.Status, lida.EmAndamento));
-        Assert.True((await TarefasAsync(service => service.RetomarAsync(tarefa, Ct))).Tarefa!.EmAndamento);
+        Assert.True((await TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct))).Tarefa!.EmAndamento);
     }
 
     [Fact]
@@ -414,7 +617,7 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     {
         var tarefa = await NaEntradaAsync();
 
-        var erro = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, Ct)));
+        var erro = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct)));
 
         Assert.Equal("Para iniciar uma tarefa da entrada, informe as branches e o prazo interno.", erro.Message);
     }
@@ -427,7 +630,7 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         await TarefasAsync(service => service.BloquearAsync(tarefa, Ct));
         Assert.False((await LerTarefaAsync(Nome))!.EmAndamento);
 
-        var erro = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, Ct)));
+        var erro = await Assert.ThrowsAsync<DomainException>(() => TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct)));
         Assert.Equal("Desbloqueie a tarefa antes de iniciá-la.", erro.Message);
 
         var desbloqueada = await TarefasAsync(service => service.DesbloquearAsync(tarefa, Ct));
@@ -440,9 +643,183 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         var tarefa = await EmRetrabalhoAsync();
         Assert.False((await LerTarefaAsync(Nome))!.EmAndamento);
 
-        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, Ct));
+        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct));
 
         Assert.Equal((StatusTarefa.Retrabalho, true), (retomada.Tarefa!.Status, retomada.Tarefa.EmAndamento));
+    }
+
+    [Fact]
+    public async Task RetomarComNovaBranchNoRetrabalhoReaproveitaABaseECriaAImplementacaoVinculadaAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        LimparChamadas();
+
+        var resultado = await RetomarComBranchAsync(tarefa, Main, NovaImplementacao, [ParteBranch.Back]);
+
+        Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
+        Assert.Equal((StatusTarefa.Retrabalho, true), (resultado.Tarefa!.Status, resultado.Tarefa.EmAndamento));
+        Assert.Equal([$"sha:{RepositorioBack}:{Main}", $"criar:{RepositorioBack}:{NovaImplementacao}:{ShaBack}"], _gitHub.Chamadas);
+
+        var lida = await LerTarefaAsync(Nome);
+        var retrabalho = Assert.Single(lida!.Retrabalhos);
+        Assert.Equal([Main, Feature, NovaImplementacao], lida.Branches.OrderBy(b => b.Id).Select(b => b.Nome));
+        var nova = lida.Branches.Single(b => b.Nome == NovaImplementacao);
+        Assert.Equal((TipoBranch.Implementacao, false, retrabalho.Id), (nova.Tipo, nova.Enviada, nova.RetrabalhoId));
+        Assert.Equal([ParteBranch.Back], nova.Partes);
+        Assert.Null(lida.Branches.Single(b => b.Nome == Main).RetrabalhoId);
+        Assert.False(lida.NovaBranchSugerida);
+        AssertNenhumaChamadaAoAsana();
+    }
+
+    [Fact]
+    public async Task RetomarComBaseNovaRegistraABaseVinculadaAoRetrabalhoAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        _gitHub.ComBranch(RepositorioBack, Release, "sha-release");
+        LimparChamadas();
+
+        await RetomarComBranchAsync(tarefa, Release, NovaImplementacao, [ParteBranch.Back]);
+
+        Assert.Equal([$"sha:{RepositorioBack}:{Release}", $"criar:{RepositorioBack}:{NovaImplementacao}:sha-release"], _gitHub.Chamadas);
+        var lida = await LerTarefaAsync(Nome);
+        var retrabalho = Assert.Single(lida!.Retrabalhos);
+        var baseNova = lida.Branches.Single(b => b.Nome == Release);
+        Assert.Equal((TipoBranch.Base, retrabalho.Id), (baseNova.Tipo, baseNova.RetrabalhoId));
+        Assert.Equal(retrabalho.Id, lida.Branches.Single(b => b.Nome == NovaImplementacao).RetrabalhoId);
+    }
+
+    [Fact]
+    public async Task RetomarSemCorpoNaoChamaOGitHubNemRegistraBranchesAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        LimparChamadas();
+
+        var retomada = await TarefasAsync(service => service.RetomarAsync(tarefa, null, Ct));
+
+        Assert.True(retomada.Tarefa!.EmAndamento);
+        Assert.Empty(_gitHub.Chamadas);
+        var lida = await LerTarefaAsync(Nome);
+        Assert.Equal(2, lida!.Branches.Count);
+        Assert.True(lida.NovaBranchSugerida);
+    }
+
+    [Fact]
+    public async Task RetomarComBaseInexistenteNaoCriaNemGravaEMantemPausadaAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        LimparChamadas();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(() => RetomarComBranchAsync(tarefa, "develop", NovaImplementacao, FrontEBack));
+
+        Assert.Equal($"A branch base 'develop' não existe no repositório de front ({RepositorioFront}).", erro.Message);
+        Assert.DoesNotContain(_gitHub.Chamadas, chamada => chamada.StartsWith("criar:", StringComparison.Ordinal));
+        var lida = await LerTarefaAsync(Nome);
+        Assert.False(lida!.EmAndamento);
+        Assert.Equal(2, lida.Branches.Count);
+    }
+
+    [Fact]
+    public async Task FalhaDoGitHubAoRetomarNaoGravaEMantemPausadaAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        _gitHub.FalharNaCriacaoEm = RepositorioBack;
+
+        await Assert.ThrowsAsync<GitHubIndisponivelException>(() => RetomarComBranchAsync(tarefa, Main, NovaImplementacao, FrontEBack));
+
+        var lida = await LerTarefaAsync(Nome);
+        Assert.False(lida!.EmAndamento);
+        Assert.DoesNotContain(lida.Branches, b => b.Nome == NovaImplementacao);
+        Assert.True(lida.NovaBranchSugerida);
+    }
+
+    [Fact]
+    public async Task RetomarComImplementacaoRepetidaEConflitoSemChamarOGitHubAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        LimparChamadas();
+
+        var resultado = await RetomarComBranchAsync(tarefa, Main, $" {Feature} ", FrontEBack);
+
+        Assert.Equal(TarefaResultadoStatus.BranchRepetida, resultado.Status);
+        Assert.Empty(_gitHub.Chamadas);
+        Assert.False((await LerTarefaAsync(Nome))!.EmAndamento);
+    }
+
+    [Fact]
+    public async Task RetomarComBaseRegistradaComoImplementacaoERejeitadoSemChamarOGitHubAsync()
+    {
+        var tarefa = await EmRetrabalhoAsync();
+        LimparChamadas();
+
+        var erro = await Assert.ThrowsAsync<DomainException>(() => RetomarComBranchAsync(tarefa, Feature, NovaImplementacao, FrontEBack));
+
+        Assert.Equal($"A branch '{Feature}' já está registrada nesta tarefa como branch de implementação e não pode ser usada como base.", erro.Message);
+        Assert.Empty(_gitHub.Chamadas);
+    }
+
+    [Fact]
+    public async Task RetomarComCorpoForaDoRetomarTemAMesmaMensagemDoRetomarSemCorpoAsync()
+    {
+        var naEntrada = await NaEntradaAsync();
+        var erroNaEntrada = await Assert.ThrowsAsync<DomainException>(() => RetomarComBranchAsync(naEntrada, Main, NovaImplementacao, FrontEBack));
+        Assert.Equal("Para iniciar uma tarefa da entrada, informe as branches e o prazo interno.", erroNaEntrada.Message);
+
+        await TarefasAsync(service => service.IniciarAsync(naEntrada, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct));
+        var erroEmAndamento = await Assert.ThrowsAsync<DomainException>(() => RetomarComBranchAsync(naEntrada, Main, NovaImplementacao, FrontEBack));
+        Assert.Equal("A tarefa já está em andamento.", erroEmAndamento.Message);
+
+        await TarefasAsync(service => service.BloquearAsync(naEntrada, Ct));
+        LimparChamadas();
+        var erroBloqueada = await Assert.ThrowsAsync<DomainException>(() => RetomarComBranchAsync(naEntrada, Main, NovaImplementacao, FrontEBack));
+        Assert.Equal("Desbloqueie a tarefa antes de iniciá-la.", erroBloqueada.Message);
+        Assert.Empty(_gitHub.Chamadas);
+    }
+
+    [Fact]
+    public async Task NovaBranchESugeridaSoNoRetrabalhoSemImplementacaoVinculadaAsync()
+    {
+        var iniciada = await IniciadaAsync();
+        Assert.False((await LerTarefaAsync(Nome))!.NovaBranchSugerida);
+
+        await EmRetrabalhoAposConclusaoAsync(iniciada);
+        Assert.True((await LerTarefaAsync(Nome))!.NovaBranchSugerida);
+
+        // Uma base vinculada ao retrabalho não basta; a implementação, por "Nova branch", resolve a sugestão.
+        _gitHub.ComBranch(RepositorioFront, Release, ShaFront);
+        await AdicionarBranchAsync(iniciada, TipoBranch.Base, Release, [ParteBranch.Front]);
+        Assert.True((await LerTarefaAsync(Nome))!.NovaBranchSugerida);
+
+        await AdicionarBranchAsync(iniciada, TipoBranch.Implementacao, Fix, [ParteBranch.Front]);
+        Assert.False((await LerTarefaAsync(Nome))!.NovaBranchSugerida);
+    }
+
+    [Fact]
+    public async Task TarefaDesarquivadaIniciadaDeNovoReaproveitaABaseRegistradaAsync()
+    {
+        var tarefa = await DesarquivadaAsync();
+        LimparChamadas();
+
+        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, NovaImplementacao, Prazo, [ParteBranch.Back]), Ct));
+
+        Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
+        Assert.Equal([$"sha:{RepositorioBack}:{Main}", $"criar:{RepositorioBack}:{NovaImplementacao}:{ShaBack}"], _gitHub.Chamadas);
+        var lida = await LerTarefaAsync(Nome);
+        Assert.Equal(StatusTarefa.EmAndamento, lida!.Status);
+        Assert.Equal([Main, Feature, NovaImplementacao], lida.Branches.OrderBy(b => b.Id).Select(b => b.Nome));
+        Assert.Single(lida.Branches, b => b.Nome == Main);
+    }
+
+    [Fact]
+    public async Task TarefaDesarquivadaIniciadaComImplementacaoJaRegistradaEConflitoAsync()
+    {
+        var tarefa = await DesarquivadaAsync();
+        LimparChamadas();
+
+        var resultado = await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct));
+
+        Assert.Equal(TarefaResultadoStatus.BranchRepetida, resultado.Status);
+        Assert.Empty(_gitHub.Chamadas);
+        Assert.Equal(StatusTarefa.Entrada, (await LerTarefaAsync(Nome))!.Status);
     }
 
     [Fact]
@@ -460,35 +837,37 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>
-    /// Tarefa nova depois da carga inicial: status entrada
+    /// Tarefa nova depois da carga inicial: status entrada, com os repositórios da empresa definidos
     /// </summary>
     private async Task<Guid> NaEntradaAsync()
     {
         await ConcluirCargaInicialAsync();
         Abertas(TarefaAsana(Nome));
         await SincronizarAsync();
+        await DefinirRepositoriosAsync(Workspace, RepositorioFront, RepositorioBack);
 
         return (await LerTarefaAsync(Nome))!.Identifier;
     }
 
     /// <summary>
-    /// Tarefa da carga inicial: em andamento, sem branches
+    /// Tarefa da carga inicial: em andamento, sem branches, com os repositórios da empresa definidos
     /// </summary>
     private async Task<Guid> NaCargaInicialAsync(DateOnly? prazoAsana = null)
     {
         Abertas(TarefaAsana(Nome, prazo: prazoAsana));
         await SincronizarAsync();
+        await DefinirRepositoriosAsync(Workspace, RepositorioFront, RepositorioBack);
 
         return (await LerTarefaAsync(Nome))!.Identifier;
     }
 
     /// <summary>
-    /// Tarefa iniciada com <see cref="Main"/> e <see cref="Feature"/>, prazo <see cref="Prazo"/>
+    /// Tarefa iniciada com <see cref="Main"/> e <see cref="Feature"/> no front e no back, prazo <see cref="Prazo"/>
     /// </summary>
     private async Task<Guid> IniciadaAsync()
     {
         var tarefa = await NaEntradaAsync();
-        await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo), Ct));
+        await TarefasAsync(service => service.IniciarAsync(tarefa, new IniciarTarefaRequest(Main, Feature, Prazo, FrontEBack), Ct));
 
         return tarefa;
     }
@@ -499,6 +878,16 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     private async Task<Guid> EmRetrabalhoAsync()
     {
         var tarefa = await IniciadaAsync();
+        await EmRetrabalhoAposConclusaoAsync(tarefa);
+
+        return tarefa;
+    }
+
+    /// <summary>
+    /// Conclui pelo Actum a tarefa iniciada e a reabre no Asana por "Maria"
+    /// </summary>
+    private async Task EmRetrabalhoAposConclusaoAsync(Guid tarefa)
+    {
         await ConclusaoAsync(service => service.ConcluirAsync(tarefa, Ct));
 
         // Concluída, a tarefa sai da lista de abertas do Asana; depois é reaberta, mantendo as tags.
@@ -512,18 +901,60 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         await SincronizarAsync();
 
         Assert.Equal(StatusTarefa.Retrabalho, (await LerTarefaAsync(Nome))!.Status);
+    }
+
+    /// <summary>
+    /// Tarefa iniciada, reatribuída no Asana (arquivada) e devolvida ao usuário: volta para a entrada com as branches
+    /// <see cref="Main"/> e <see cref="Feature"/> registradas
+    /// </summary>
+    private async Task<Guid> DesarquivadaAsync()
+    {
+        var tarefa = await IniciadaAsync();
+
+        Abertas();
+        Asana.Tarefas[Gid(Nome)] = TarefaAsana(Nome, responsavelGid: "outra-pessoa");
+        await SincronizarAsync();
+        Assert.Equal(StatusTarefa.Arquivada, (await LerTarefaAsync(Nome))!.Status);
+
+        Abertas(TarefaAsana(Nome, modificadaEm: DateTime.Now.AddMinutes(1)));
+        await SincronizarAsync();
+
+        var lida = await LerTarefaAsync(Nome);
+        Assert.Equal(StatusTarefa.Entrada, lida!.Status);
+        Assert.Equal(2, lida.Branches.Count);
         return tarefa;
     }
 
-    private Task<TarefaResultado> AdicionarBranchAsync(Guid tarefa, TipoBranch tipo, string nome)
+    private Task<TarefaResultado> RetomarComBranchAsync(Guid tarefa, string branchBase, string branchImplementacao, IReadOnlyList<ParteBranch> partes)
     {
-        return TarefasAsync(service => service.AdicionarBranchAsync(tarefa, new AdicionarBranchRequest(tipo, nome), Ct));
+        return TarefasAsync(service => service.RetomarAsync(tarefa, new RetomarTarefaRequest(branchBase, branchImplementacao, partes), Ct));
+    }
+
+    /// <summary>
+    /// Deixa as branches da tarefa sem partes, como as registradas antes das partes existirem
+    /// </summary>
+    private async Task RemoverPartesAsync()
+    {
+        await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
+        var tarefa = await TarefaCiclo.CarregarAsync(contexto, (await LerTarefaAsync(Nome))!.Identifier, Ct);
+        foreach (var branch in tarefa!.Branches)
+        {
+            contexto.Entry(branch).Property(b => b.ParteFront).CurrentValue = false;
+            contexto.Entry(branch).Property(b => b.ParteBack).CurrentValue = false;
+        }
+
+        await contexto.SaveChangesAsync(Ct);
+    }
+
+    private Task<TarefaResultado> AdicionarBranchAsync(Guid tarefa, TipoBranch tipo, string nome, IReadOnlyList<ParteBranch>? partes = null)
+    {
+        return TarefasAsync(service => service.AdicionarBranchAsync(tarefa, new AdicionarBranchRequest(tipo, nome, partes ?? FrontEBack), Ct));
     }
 
     private async Task<T> TarefasAsync<T>(Func<ITarefaService, Task<T>> acao)
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
-        return await acao(new TarefaService(contexto));
+        return await acao(new TarefaService(contexto, _gitHub));
     }
 
     private async Task<T> ConclusaoAsync<T>(Func<IConclusaoService, Task<T>> acao)
@@ -538,6 +969,7 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
         Asana.TarefasConsultadas.Clear();
         Asana.StoriesConsultadas.Clear();
         Asana.WorkspacesListados.Clear();
+        _gitHub.Chamadas.Clear();
     }
 
     private void AssertNenhumaChamadaAoAsana()

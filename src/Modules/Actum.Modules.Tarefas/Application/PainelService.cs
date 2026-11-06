@@ -136,7 +136,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
             tarefa.SincronizadaEm,
             branches,
             Retrabalhos(tarefa.Retrabalhos, comentarios),
-            comentarios);
+            comentarios,
+            tarefa.NovaBranchSugerida);
     }
 
     public async Task<bool> MarcarComentariosLidosAsync(Guid identifier, CancellationToken cancellationToken)

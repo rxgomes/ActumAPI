@@ -77,6 +77,25 @@ Os user-secrets são carregados apenas em `Development`. O token nunca deve ser 
 
 Quando um endpoint depende do Asana, as falhas viram Problem Details: token ausente ou recusado gera `400`, e Asana fora do ar, tempo esgotado ou limite de requisições esgotado (após 3 novas tentativas em `429`) gera `502`.
 
+## Token do GitHub (branches ao iniciar)
+
+Ao iniciar uma tarefa (e ao registrar uma nova branch), o Actum cria a branch de implementação no GitHub, a partir do último commit da branch base, nos repositórios das partes marcadas (front e/ou back). Os repositórios de cada empresa (`dono/repo`) são cadastrados na página Empresas do front ou por `PATCH /empresas/{identifier}` (`repositorioFront`, `repositorioBack`).
+
+**1. Gerar o token no GitHub**
+
+1. Abra <https://github.com/settings/personal-access-tokens> e clique em **Generate new token** (fine-grained).
+2. Em **Repository access**, escolha os repositórios de front e de back das empresas.
+3. Em **Permissions** → **Repository permissions**, dê **Contents: Read and write** (o Metadata: Read-only entra junto).
+4. Gere e copie o token.
+
+**2. Configurar no Actum**
+
+```bash
+dotnet user-secrets set "GitHub:Token" "<seu-token>" --project src/Actum.Api
+```
+
+As falhas do GitHub viram Problem Details: token ausente ou recusado, repositório inexistente ou sem acesso e branch recusada geram `400`; GitHub fora do ar, tempo esgotado ou limite de requisições esgotado geram `502`. Como no Asana, o token nunca é versionado, registrado em log nem devolvido pela API.
+
 ## Configurar a Claude API (análise com IA)
 
 A análise da demanda (`POST /tarefas/{identifier}/analises`) usa a Claude API da Anthropic. Crie uma chave no Console da Anthropic (<https://platform.claude.com>, em **API keys**) e guarde-a em `dotnet user-secrets`, na chave `Claude:ApiKey`:

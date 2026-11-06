@@ -4,6 +4,7 @@ using Actum.Shared.Abstractions.Pagination;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 namespace Actum.Modules.Tarefas.Endpoints;
@@ -55,17 +56,28 @@ public static class TarefaEndpoints
         group.MapPost("/{identifier:guid}/iniciar", IniciarAsync)
             .WithName("IniciarTarefa")
             .WithSummary("Iniciar tarefa")
-            .WithDescription("Inicia uma tarefa da entrada com a branch base, a branch de implementação (diferentes) e o prazo interno. As branches só são enviadas ao Asana na conclusão.")
+            .WithDescription("Inicia uma tarefa da entrada com a branch base, a branch de implementação (diferentes), o prazo interno e as partes (front e/ou back). Antes de gravar, a branch de implementação é criada no repositório do GitHub de cada parte, a partir do último commit da base (uma branch que já existe é aceita); se o GitHub recusar ou falhar, a tarefa não é iniciada. Uma base que a tarefa já tem (tarefa desarquivada) é só conferida, sem ser registrada de novo; uma implementação com nome já registrado na tarefa é recusada com 409. As branches só são enviadas ao Asana na conclusão.")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
+
+        group.MapGet("/{identifier:guid}/branches-base-recentes", ListarBasesRecentesAsync)
+            .WithName("ListarBasesRecentes")
+            .WithSummary("Bases recentes da empresa")
+            .WithDescription("Devolve até 3 nomes distintos de branches base registradas nas tarefas da mesma empresa da tarefa informada, da mais recente para a mais antiga.")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{identifier:guid}/retomar", RetomarAsync)
             .WithName("RetomarTarefa")
             .WithSummary("Retomar tarefa (Em andamento)")
-            .WithDescription("Põe em andamento uma tarefa pausada, já iniciada ou em retrabalho. Tarefas bloqueadas precisam ser desbloqueadas antes. Nada é enviado ao Asana.")
+            .WithDescription("Põe em andamento uma tarefa pausada, já iniciada ou em retrabalho. Tarefas bloqueadas precisam ser desbloqueadas antes. O corpo é opcional: com branchBase, branchImplementacao e partes, a branch de implementação é criada no repositório do GitHub de cada parte a partir do último commit da base e registrada vinculada ao retrabalho aberto (uma base que a tarefa já tem é só conferida); se o GitHub recusar ou falhar, nada é gravado e a tarefa continua pausada. Uma implementação com nome já registrado na tarefa é recusada com 409. Nada é enviado ao Asana.")
+            .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
 
         group.MapPost("/{identifier:guid}/pausar", PausarAsync)
             .WithName("PausarTarefa")
@@ -91,29 +103,30 @@ public static class TarefaEndpoints
         group.MapPost("/{identifier:guid}/branches", AdicionarBranchAsync)
             .WithName("AdicionarBranch")
             .WithSummary("Registrar branch")
-            .WithDescription("Registra uma branch (base ou implementacao) em tarefa em andamento, bloqueada ou em retrabalho. Em retrabalho, a branch fica vinculada ao retrabalho aberto. Nomes não se repetem na tarefa.")
+            .WithDescription("Registra uma branch (base ou implementacao), com as partes (front e/ou back), em tarefa em andamento, bloqueada ou em retrabalho. Uma base precisa existir no repositório do GitHub de cada parte; uma implementação é criada em cada um deles a partir da base mais recente da tarefa (uma branch que já existe é aceita). Em retrabalho, a branch fica vinculada ao retrabalho aberto. Nomes não se repetem na tarefa.")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
 
         group.MapDelete("/{identifier:guid}/branches/{branchIdentifier:guid}", RemoverBranchAsync)
             .WithName("RemoverBranch")
             .WithSummary("Excluir branch")
-            .WithDescription("Exclui uma branch ainda não enviada ao Asana (para corrigir erro de digitação). Branches enviadas não podem ser excluídas.")
+            .WithDescription("Exclui uma branch ainda não enviada ao Asana (para corrigir erro de digitação). Branches enviadas não podem ser excluídas. A branch não é excluída no GitHub.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/{identifier:guid}/conclusao/previa", ObterPreviaAsync)
             .WithName("ObterPreviaDaConclusao")
             .WithSummary("Prévia da conclusão")
-            .WithDescription("Informa as tags que serão adicionadas no Asana (branches ainda não enviadas) e se a conclusão é permitida, com o motivo quando não for. Não consulta o Asana.")
+            .WithDescription("Informa as tags que serão adicionadas no Asana (branches ainda não enviadas, no formato \"(Front, Back) => nome\", ou só o nome em branches sem partes) e se a conclusão é permitida, com o motivo quando não for. Não consulta o Asana.")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{identifier:guid}/concluir", ConcluirAsync)
             .WithName("ConcluirTarefa")
             .WithSummary("Concluir tarefa")
-            .WithDescription("Adiciona no Asana, como tags com o nome exato, só as branches ainda não enviadas, conclui a tarefa no Asana e no Actum e resolve o retrabalho aberto. Se o Asana falhar no meio, uma nova tentativa continua de onde parou.")
+            .WithDescription("Adiciona no Asana, como tags (\"(Front, Back) => nome\", ou só o nome em branches sem partes), só as branches ainda não enviadas, conclui a tarefa no Asana e no Actum e resolve o retrabalho aberto. Se o Asana falhar no meio, uma nova tentativa continua de onde parou.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status502BadGateway);
@@ -181,10 +194,11 @@ public static class TarefaEndpoints
 
     private static async Task<Results<Ok<TarefaCicloResponse>, ProblemHttpResult>> RetomarAsync(
         Guid identifier,
+        [FromBody] RetomarTarefaRequest? request,
         ITarefaService service,
         CancellationToken cancellationToken)
     {
-        return ParaResposta(await service.RetomarAsync(identifier, cancellationToken));
+        return ParaResposta(await service.RetomarAsync(identifier, request, cancellationToken));
     }
 
     private static async Task<Results<Ok<TarefaCicloResponse>, ProblemHttpResult>> PausarAsync(
@@ -227,6 +241,20 @@ public static class TarefaEndpoints
         };
     }
 
+    private static async Task<Results<Ok<IReadOnlyList<string>>, ProblemHttpResult>> ListarBasesRecentesAsync(
+        Guid identifier,
+        ITarefaService service,
+        CancellationToken cancellationToken)
+    {
+        var bases = await service.ListarBasesRecentesAsync(identifier, cancellationToken);
+        if (bases is null)
+        {
+            return NaoEncontrada();
+        }
+
+        return TypedResults.Ok(bases);
+    }
+
     private static async Task<Results<NoContent, ProblemHttpResult>> RemoverBranchAsync(
         Guid identifier,
         Guid branchIdentifier,
@@ -266,12 +294,12 @@ public static class TarefaEndpoints
 
     private static Results<Ok<TarefaCicloResponse>, ProblemHttpResult> ParaResposta(TarefaResultado resultado)
     {
-        if (resultado.Status == TarefaResultadoStatus.NaoEncontrada)
+        return resultado.Status switch
         {
-            return NaoEncontrada();
-        }
-
-        return TypedResults.Ok(resultado.Tarefa);
+            TarefaResultadoStatus.NaoEncontrada => NaoEncontrada(),
+            TarefaResultadoStatus.BranchRepetida => TypedResults.Problem(detail: BranchRepetida, statusCode: StatusCodes.Status409Conflict),
+            _ => TypedResults.Ok(resultado.Tarefa),
+        };
     }
 
     private static ProblemHttpResult NaoEncontrada()

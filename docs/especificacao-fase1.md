@@ -42,13 +42,14 @@ Para implementar: `/opsx:apply <change>`; ao terminar e revisar: `/opsx:archive 
 | Tarefas novas | Depois da carga inicial, entram em `entrada` |
 | Concluída antes do Actum e reaberta | Entra em `entrada`, sem histórico |
 | Retrabalho | Detectado na sincronização; prazo interno fica pendente até o usuário definir o novo |
-| Branches | Digitadas pelo usuário ao iniciar; nome da tag = nome digitado |
+| Branches | Informadas pelo usuário ao iniciar, com as partes (front e/ou back); a branch de implementação é criada no GitHub a partir da base, nos repositórios das partes. Tag = `(Front, Back) => nome` (só o nome nas branches registradas antes das partes) |
 | Conclusão | Adiciona só as tags ainda não enviadas, depois conclui no Asana; a nova tentativa após falha continua de onde parou |
 | Retrabalho com branch nova | A nova tag é adicionada e as antigas são mantidas |
 | Stack | .NET 10, Minimal API, monolito modular, EF Core + PostgreSQL local; Vue 3 + Quasar |
 | Repositórios | `E:\Ixact\Actum\ActumAPI` e `E:\Ixact\Actum\ActumUI` |
 | Convenções | As mesmas do Clavus (`CLAUDE.md`, `openspec/config.yaml`) |
 | Token do Asana | `dotnet user-secrets` (`Asana:Token`), nunca versionado |
+| Token do GitHub | `dotnet user-secrets` (`GitHub:Token`, Contents: read and write), nunca versionado |
 
 ## 4. Status da tarefa
 

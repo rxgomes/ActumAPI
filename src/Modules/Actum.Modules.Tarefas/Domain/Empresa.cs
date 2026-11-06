@@ -13,6 +13,8 @@ public sealed class Empresa : Entity
 
     public const int CorLength = 7;
 
+    public const int RepositorioMaxLength = 200;
+
     /// <summary>
     /// Fixed palette; new companies get the next color, in creation order
     /// </summary>
@@ -51,6 +53,26 @@ public sealed class Empresa : Entity
     /// Whether the synchronization reads the tasks of this company
     /// </summary>
     public bool Sincronizar { get; set; } = true;
+
+    /// <summary>
+    /// GitHub repository of the front-end (<c>owner/repo</c>); <see langword="null"/> when not defined
+    /// </summary>
+    public string? RepositorioFront { get; set; }
+
+    /// <summary>
+    /// GitHub repository of the back-end (<c>owner/repo</c>); <see langword="null"/> when not defined
+    /// </summary>
+    public string? RepositorioBack { get; set; }
+
+    /// <summary>
+    /// GitHub repository of a part, or <see langword="null"/> when not defined
+    /// </summary>
+    /// <param name="parte">Part of the system</param>
+    /// <returns>Repository (<c>owner/repo</c>) or <see langword="null"/></returns>
+    public string? Repositorio(ParteBranch parte)
+    {
+        return parte == ParteBranch.Front ? RepositorioFront : RepositorioBack;
+    }
 
     /// <summary>
     /// When the first synchronization of the company finished; <see langword="null"/> until then

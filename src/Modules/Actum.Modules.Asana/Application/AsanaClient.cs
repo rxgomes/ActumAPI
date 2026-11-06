@@ -101,7 +101,7 @@ internal sealed class AsanaClient(HttpClient httpClient, IConfiguration configur
         var tags = await ListarTodasAsPaginasAsync<RecursoJson>(
             $"workspaces/{Escapar(workspaceGid)}/tags?limit={TamanhoDaPagina}&opt_fields=name", cancellationToken);
 
-        // O nome da tag é o nome da branch, e branches do Git diferenciam maiúsculas.
+        // O nome da tag contém o nome da branch, e branches do Git diferenciam maiúsculas.
         var existente = tags.FirstOrDefault(tag => string.Equals(tag.Name, nome, StringComparison.Ordinal));
         if (existente is not null)
         {

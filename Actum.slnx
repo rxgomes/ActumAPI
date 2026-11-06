@@ -5,6 +5,7 @@
   <Folder Name="/src/Modules/">
     <Project Path="src/Modules/Actum.Modules.Asana/Actum.Modules.Asana.csproj" />
     <Project Path="src/Modules/Actum.Modules.Claude/Actum.Modules.Claude.csproj" />
+    <Project Path="src/Modules/Actum.Modules.GitHub/Actum.Modules.GitHub.csproj" />
     <Project Path="src/Modules/Actum.Modules.Tarefas/Actum.Modules.Tarefas.csproj" />
   </Folder>
   <Folder Name="/src/Shared/">
@@ -15,6 +16,7 @@
     <Project Path="tests/Actum.Api.Tests/Actum.Api.Tests.csproj" />
     <Project Path="tests/Actum.Modules.Asana.Tests/Actum.Modules.Asana.Tests.csproj" />
     <Project Path="tests/Actum.Modules.Claude.Tests/Actum.Modules.Claude.Tests.csproj" />
+    <Project Path="tests/Actum.Modules.GitHub.Tests/Actum.Modules.GitHub.Tests.csproj" />
     <Project Path="tests/Actum.Modules.Tarefas.Tests/Actum.Modules.Tarefas.Tests.csproj" />
     <Project Path="tests/Actum.Shared.Infrastructure.Tests/Actum.Shared.Infrastructure.Tests.csproj" />
   </Folder>

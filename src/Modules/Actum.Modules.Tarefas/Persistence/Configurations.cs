@@ -15,6 +15,8 @@ internal sealed class EmpresaConfiguration : IEntityTypeConfiguration<Empresa>
         builder.HasIndex(empresa => empresa.AsanaWorkspaceGid).IsUnique();
         builder.Property(empresa => empresa.Nome).HasMaxLength(Empresa.NomeMaxLength);
         builder.Property(empresa => empresa.Cor).HasMaxLength(Empresa.CorLength);
+        builder.Property(empresa => empresa.RepositorioFront).HasMaxLength(Empresa.RepositorioMaxLength);
+        builder.Property(empresa => empresa.RepositorioBack).HasMaxLength(Empresa.RepositorioMaxLength);
 
         // Default só para inclusões por SQL; a aplicação sempre envia o valor (false incluído).
         builder.Property(empresa => empresa.Sincronizar).HasDefaultValue(true).ValueGeneratedNever();
@@ -75,6 +77,7 @@ internal sealed class TarefaConfiguration : IEntityTypeConfiguration<Tarefa>
 
         // Calculada a partir de Branches; sem isso o EF a mapearia como uma segunda navegação.
         builder.Ignore(tarefa => tarefa.BranchesPendentes);
+        builder.Ignore(tarefa => tarefa.NovaBranchSugerida);
 
         builder.HasIndex(tarefa => new { tarefa.EmpresaId, tarefa.Status });
         builder.HasIndex(tarefa => tarefa.PrazoInterno);
@@ -146,6 +149,8 @@ internal sealed class TarefaBranchConfiguration : IEntityTypeConfiguration<Taref
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Ignore(branch => branch.Enviada);
+        builder.Ignore(branch => branch.Partes);
+        builder.Ignore(branch => branch.Tag);
     }
 }
 

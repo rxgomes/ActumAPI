@@ -38,6 +38,16 @@ internal sealed class EmpresaService(TarefasDbContext context) : IEmpresaService
             empresa.Sincronizar = sincronizar;
         }
 
+        if (request.RepositorioFront is not null)
+        {
+            empresa.RepositorioFront = RepositorioOuNulo(request.RepositorioFront);
+        }
+
+        if (request.RepositorioBack is not null)
+        {
+            empresa.RepositorioBack = RepositorioOuNulo(request.RepositorioBack);
+        }
+
         await context.SaveChangesAsync(cancellationToken);
 
         return ParaResponse(empresa);
@@ -45,6 +55,22 @@ internal sealed class EmpresaService(TarefasDbContext context) : IEmpresaService
 
     internal static EmpresaResponse ParaResponse(Empresa empresa)
     {
-        return new EmpresaResponse(empresa.Identifier, empresa.Nome, empresa.Cor, empresa.Sincronizar, empresa.CargaInicialEm);
+        return new EmpresaResponse(
+            empresa.Identifier,
+            empresa.Nome,
+            empresa.Cor,
+            empresa.Sincronizar,
+            empresa.CargaInicialEm,
+            empresa.RepositorioFront,
+            empresa.RepositorioBack);
+    }
+
+    /// <summary>
+    /// Repository without spaces at the ends; empty text removes it
+    /// </summary>
+    private static string? RepositorioOuNulo(string repositorio)
+    {
+        var valor = repositorio.Trim();
+        return valor.Length == 0 ? null : valor;
     }
 }

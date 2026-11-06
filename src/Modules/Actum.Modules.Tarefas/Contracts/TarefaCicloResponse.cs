@@ -33,17 +33,21 @@ public sealed record TarefaCicloResponse(
 /// </summary>
 /// <param name="Identifier">Branch identifier</param>
 /// <param name="Tipo">Role: <c>base</c> or <c>implementacao</c></param>
-/// <param name="Nome">Branch name, also the tag name in the Asana</param>
+/// <param name="Nome">Branch name</param>
 /// <param name="Enviada">Whether the tag is already in the Asana task</param>
 /// <param name="EnviadaAsanaEm">When the tag was added in the Asana</param>
 /// <param name="RetrabalhoNumero">Number of the rework open when the branch was registered</param>
+/// <param name="Partes">Parts of the branch (<c>front</c>, <c>back</c>), in this order; empty for branches registered before the parts existed</param>
+/// <param name="Tag">Text of the tag in the Asana: <c>(Front, Back) => nome</c>, <c>(Front) => nome</c> or <c>(Back) => nome</c>; just the name when the branch has no parts</param>
 public sealed record BranchResponse(
     Guid Identifier,
     [property: JsonConverter(typeof(SnakeCaseEnumJsonConverter<TipoBranch>))] TipoBranch Tipo,
     string Nome,
     bool Enviada,
     DateTime? EnviadaAsanaEm,
-    short? RetrabalhoNumero);
+    short? RetrabalhoNumero,
+    IReadOnlyList<ParteBranch> Partes,
+    string Tag);
 
 /// <summary>
 /// Preview of the completion of a task

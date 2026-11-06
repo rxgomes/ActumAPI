@@ -5,6 +5,7 @@
     <ProjectReference Include="..\..\Shared\Actum.Shared.Infrastructure\Actum.Shared.Infrastructure.csproj" />
     <ProjectReference Include="..\Actum.Modules.Asana\Actum.Modules.Asana.csproj" />
     <ProjectReference Include="..\Actum.Modules.Claude\Actum.Modules.Claude.csproj" />
+    <ProjectReference Include="..\Actum.Modules.GitHub\Actum.Modules.GitHub.csproj" />
   </ItemGroup>
 
   <ItemGroup>

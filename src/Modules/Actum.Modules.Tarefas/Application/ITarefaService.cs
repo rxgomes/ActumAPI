@@ -13,28 +13,53 @@ namespace Actum.Modules.Tarefas.Application;
 public interface ITarefaService
 {
     /// <summary>
-    /// Start a task from the inbox with its base and implementation branches (registered as not sent) and the
-    /// internal due date
+    /// Start a task from the inbox with its base and implementation branches (registered as not sent, with the
+    /// parts) and the internal due date. Before saving, the implementation branch is created in the GitHub
+    /// repository of each part from the last commit of the base (an existing branch is accepted); the
+    /// <see cref="Actum.Modules.GitHub.Errors.GitHubException"/> failures leave the task unchanged.
     /// </summary>
     /// <param name="identifier">Task identifier</param>
-    /// <param name="request">Branches and internal due date</param>
+    /// <param name="request">Branches, parts and internal due date</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The started task, or <see cref="TarefaResultadoStatus.NaoEncontrada"/></returns>
+    /// <returns>
+    /// The started task, <see cref="TarefaResultadoStatus.NaoEncontrada"/>, or
+    /// <see cref="TarefaResultadoStatus.BranchRepetida"/> when the task already has a branch with the implementation
+    /// name (a base branch already registered is reused)
+    /// </returns>
     /// <author>Ricardo Gomes</author>
     /// <created>2026-11-03</created>
-    /// <modified>2026-11-03</modified>
+    /// <modified>2026-11-06</modified>
     Task<TarefaResultado> IniciarAsync(Guid identifier, IniciarTarefaRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Resume work on a paused task already started or in rework (it becomes <c>Em andamento</c>)
+    /// List up to 3 distinct names of base branches registered in the tasks of the same company as the given task,
+    /// from the most recent to the oldest
     /// </summary>
     /// <param name="identifier">Task identifier</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The task in progress, or <see cref="TarefaResultadoStatus.NaoEncontrada"/></returns>
+    /// <returns>Base branch names, or <see langword="null"/> when the task does not exist</returns>
+    /// <author>Ricardo Gomes</author>
+    /// <created>2026-11-06</created>
+    /// <modified>2026-11-06</modified>
+    Task<IReadOnlyList<string>?> ListarBasesRecentesAsync(Guid identifier, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resume work on a paused task already started or in rework (it becomes <c>Em andamento</c>). With a new
+    /// branch, the implementation branch is created in the GitHub repository of each part from the last commit of
+    /// the base and registered linked to the open rework, before saving (the base is reused when the task already
+    /// has it); the <see cref="Actum.Modules.GitHub.Errors.GitHubException"/> failures leave the task unchanged.
+    /// </summary>
+    /// <param name="identifier">Task identifier</param>
+    /// <param name="request">New branch to create, or <see langword="null"/> to only resume</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>
+    /// The task in progress, <see cref="TarefaResultadoStatus.NaoEncontrada"/>, or
+    /// <see cref="TarefaResultadoStatus.BranchRepetida"/> when the task already has a branch with the implementation name
+    /// </returns>
     /// <author>Ricardo Gomes</author>
     /// <created>2026-11-04</created>
-    /// <modified>2026-11-04</modified>
-    Task<TarefaResultado> RetomarAsync(Guid identifier, CancellationToken cancellationToken);
+    /// <modified>2026-11-06</modified>
+    Task<TarefaResultado> RetomarAsync(Guid identifier, RetomarTarefaRequest? request, CancellationToken cancellationToken);
 
     /// <summary>
     /// Pause a task in progress (it becomes <c>Pausada</c>)
@@ -83,10 +108,12 @@ public interface ITarefaService
     Task<TarefaResultado> AlterarAsync(Guid identifier, AlterarTarefaRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Register a branch in a task in progress, blocked or in rework, linked to the open rework when there is one
+    /// Register a branch in a task in progress, blocked or in rework, linked to the open rework when there is one.
+    /// Before saving, a base branch must exist in the GitHub repository of each part, and an implementation branch
+    /// is created in each of them from the most recent base branch of the task (an existing branch is accepted).
     /// </summary>
     /// <param name="identifier">Task identifier</param>
-    /// <param name="request">Branch role and name</param>
+    /// <param name="request">Branch role, name and parts</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>
     /// The task and the new branch, <see cref="TarefaResultadoStatus.NaoEncontrada"/>, or
@@ -94,7 +121,7 @@ public interface ITarefaService
     /// </returns>
     /// <author>Ricardo Gomes</author>
     /// <created>2026-11-03</created>
-    /// <modified>2026-11-03</modified>
+    /// <modified>2026-11-06</modified>
     Task<TarefaResultado> AdicionarBranchAsync(Guid identifier, AdicionarBranchRequest request, CancellationToken cancellationToken);
 
     /// <summary>

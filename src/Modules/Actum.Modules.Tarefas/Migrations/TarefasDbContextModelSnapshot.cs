@@ -418,6 +418,16 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("nome");
 
+                    b.Property<string>("RepositorioBack")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("repositorio_back");
+
+                    b.Property<string>("RepositorioFront")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("repositorio_front");
+
                     b.Property<bool>("Sincronizar")
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
@@ -790,6 +800,14 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)")
                         .HasColumnName("nome");
+
+                    b.Property<bool>("ParteBack")
+                        .HasColumnType("boolean")
+                        .HasColumnName("parte_back");
+
+                    b.Property<bool>("ParteFront")
+                        .HasColumnType("boolean")
+                        .HasColumnName("parte_front");
 
                     b.Property<long?>("RetrabalhoId")
                         .HasColumnType("bigint")

@@ -1,5 +1,6 @@
 using Actum.Modules.Asana;
 using Actum.Modules.Claude;
+using Actum.Modules.GitHub;
 using Actum.Modules.Tarefas;
 using Actum.Shared.Abstractions;
 
@@ -15,6 +16,7 @@ internal static class ModuleCatalog
     [
         new AsanaModule(),
         new ClaudeModule(),
+        new GitHubModule(),
         new TarefasModule(),
     ];
 }

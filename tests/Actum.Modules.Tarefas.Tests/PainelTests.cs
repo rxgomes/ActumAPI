@@ -21,6 +21,10 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
 
     private readonly RelogioFixo _relogio = new(new DateTime(2026, 11, 4, 9, 30, 0));
 
+    private const string RepositorioBack = "ixact/erp-api";
+
+    private readonly GitHubClientFalso _gitHub = new GitHubClientFalso().ComBranch(RepositorioBack, "main", "sha-back");
+
     [Fact]
     public async Task CadaTarefaAbertaFicaEmUmUnicoGrupoNaOrdemDoPainelAsync()
     {
@@ -306,7 +310,8 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
             Comentario("motivo", "Maria", "O IPI da devolução não somou", new DateTime(2026, 11, 1, 9, 50, 0)),
             Comentario("detalhe", "Maria", "Print em anexo", new DateTime(2026, 11, 2, 8, 0, 0)));
         await SincronizarAsync();
-        await TarefasAsync(service => service.AdicionarBranchAsync(Identifier("ipi"), new AdicionarBranchRequest(TipoBranch.Base, "main"), Ct));
+        await DefinirRepositoriosAsync(Workspace, null, RepositorioBack);
+        await TarefasAsync(service => service.AdicionarBranchAsync(Identifier("ipi"), new AdicionarBranchRequest(TipoBranch.Base, "main", [ParteBranch.Back]), Ct));
 
         var detalhe = await PainelServiceAsync(service => service.ObterDetalheAsync(Identifier("ipi"), Ct));
 
@@ -318,6 +323,9 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
         Assert.Equal("Pode começar", detalhe.Comentarios[0].Texto);
         Assert.True(detalhe.Comentarios[0].Lido);
         Assert.Equal([("main", false)], detalhe.Branches.Select(b => (b.Nome, b.Enviada)));
+        var branch = Assert.Single(detalhe.Branches);
+        Assert.Equal([ParteBranch.Back], branch.Partes);
+        Assert.Equal("(Back) => main", branch.Tag);
         Assert.Equal(("Tarefa ipi", "Aureum-ERP", StatusTarefa.Retrabalho), (detalhe.Titulo, detalhe.Empresa.Nome, detalhe.Status));
 
         Assert.Null(await PainelServiceAsync(service => service.ObterDetalheAsync(Guid.CreateVersion7(), Ct)));
@@ -408,7 +416,7 @@ public sealed class PainelTests(PostgresFixture postgres) : SincronizacaoTestBas
     private async Task<T> TarefasAsync<T>(Func<ITarefaService, Task<T>> acao)
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
-        return await acao(new TarefaService(contexto));
+        return await acao(new TarefaService(contexto, _gitHub));
     }
 
     private Guid Identifier(string nome)

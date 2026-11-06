@@ -187,6 +187,18 @@ public abstract class SincronizacaoTestBase(PostgresFixture postgres) : IAsyncLi
     }
 
     /// <summary>
+    /// Define os repositórios do GitHub da empresa do workspace (a empresa precisa já existir)
+    /// </summary>
+    protected async Task DefinirRepositoriosAsync(string workspace, string? front, string? back)
+    {
+        await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
+        var empresa = await contexto.Set<Empresa>().SingleAsync(e => e.AsanaWorkspaceGid == workspace, TestContext.Current.CancellationToken);
+        empresa.RepositorioFront = front;
+        empresa.RepositorioBack = back;
+        await contexto.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
     /// Simula o que o ciclo de vida faz fora desta change: muda status, data de conclusão e prazo interno
     /// </summary>
     protected async Task AlterarTarefaAsync(

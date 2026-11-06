@@ -164,6 +164,29 @@ public sealed class Tarefa : Entity
         .ToList();
 
     /// <summary>
+    /// Whether a new implementation branch is suggested when the task is resumed: the task is in rework and the most
+    /// recent open rework has no implementation branch linked to it yet
+    /// </summary>
+    public bool NovaBranchSugerida
+    {
+        get
+        {
+            if (Status != StatusTarefa.Retrabalho)
+            {
+                return false;
+            }
+
+            var retrabalhoAberto = RetrabalhosAbertos().MaxBy(retrabalho => retrabalho.Numero);
+            if (retrabalhoAberto is null)
+            {
+                return false;
+            }
+
+            return !_branches.Any(branch => branch.Tipo == TipoBranch.Implementacao && branch.RetrabalhoId == retrabalhoAberto.Id);
+        }
+    }
+
+    /// <summary>
     /// Create the local copy of an Asana task. In the initial load of the company the task starts
     /// <see cref="StatusTarefa.EmAndamento"/> with the internal due date equal to the Asana due date; otherwise it
     /// starts in <see cref="StatusTarefa.Entrada"/> without internal due date.
@@ -362,20 +385,81 @@ public sealed class Tarefa : Entity
     }
 
     /// <summary>
-    /// Start a task from the inbox with its base and implementation branches and the internal due date. Nothing
-    /// is sent to the Asana.
+    /// Start a task from the inbox with its base and implementation branches, the parts they belong to and the
+    /// internal due date. Nothing is sent to the Asana; creating the branch in the GitHub is up to the caller.
     /// </summary>
     /// <param name="branchBase">Base branch name</param>
     /// <param name="branchImplementacao">Implementation branch name</param>
     /// <param name="prazoInterno">Internal due date</param>
-    /// <exception cref="DomainException">The task is not in the inbox, or the branches are empty or equal</exception>
-    public void Iniciar(string branchBase, string branchImplementacao, DateOnly prazoInterno)
+    /// <param name="partes">Parts of the branches (at least one)</param>
+    /// <returns>
+    /// The base branch (the one already registered with this name, when there is one) and the new implementation
+    /// branch, or <see langword="null"/> when the task already has a branch with the implementation name
+    /// </returns>
+    /// <exception cref="DomainException">The task is not in the inbox, a name is invalid, the branches are equal, no part was given or the base is registered as an implementation branch</exception>
+    public (TarefaBranch Base, TarefaBranch Implementacao)? Iniciar(
+        string branchBase,
+        string branchImplementacao,
+        DateOnly prazoInterno,
+        IReadOnlyCollection<ParteBranch> partes)
     {
         if (Status != StatusTarefa.Entrada)
         {
             throw new DomainException($"Só é possível iniciar uma tarefa que está na entrada. Status atual: {StatusTarefaTexto.Descrever(Status)}.");
         }
 
+        var branches = RegistrarBranchesDoCiclo(branchBase, branchImplementacao, partes);
+        if (branches is null)
+        {
+            return null;
+        }
+
+        Status = StatusTarefa.EmAndamento;
+        EmAndamento = true;
+        DefinirPrazoInterno(prazoInterno);
+
+        return branches;
+    }
+
+    /// <summary>
+    /// Resume a paused task in progress or in rework with a new implementation branch, linked to the open rework
+    /// when there is one. Nothing is sent to the Asana; creating the branch in the GitHub is up to the caller.
+    /// </summary>
+    /// <param name="branchBase">Base branch name (reused when the task already has it as a base branch)</param>
+    /// <param name="branchImplementacao">New implementation branch name</param>
+    /// <param name="partes">Parts of the new branches (at least one)</param>
+    /// <returns>
+    /// The base branch and the new implementation branch, or <see langword="null"/> when the task already has a
+    /// branch with the implementation name
+    /// </returns>
+    /// <exception cref="DomainException">The task cannot be resumed (see <see cref="Retomar"/>), a name is invalid, the branches are equal, no part was given or the base is registered as an implementation branch</exception>
+    public (TarefaBranch Base, TarefaBranch Implementacao)? RetomarComBranch(
+        string branchBase,
+        string branchImplementacao,
+        IReadOnlyCollection<ParteBranch> partes)
+    {
+        GarantirQuePodeRetomar();
+
+        var branches = RegistrarBranchesDoCiclo(branchBase, branchImplementacao, partes);
+        if (branches is null)
+        {
+            return null;
+        }
+
+        EmAndamento = true;
+
+        return branches;
+    }
+
+    /// <summary>
+    /// Register the branches of a work cycle (first start or rework): the base is reused when the task already has
+    /// it as a base branch; the new branches are linked to the open rework, when there is one
+    /// </summary>
+    private (TarefaBranch Base, TarefaBranch Implementacao)? RegistrarBranchesDoCiclo(
+        string branchBase,
+        string branchImplementacao,
+        IReadOnlyCollection<ParteBranch> partes)
+    {
         var nomeBase = NomeDaBranch(branchBase);
         var nomeImplementacao = NomeDaBranch(branchImplementacao);
         if (string.Equals(nomeBase, nomeImplementacao, StringComparison.Ordinal))
@@ -383,11 +467,30 @@ public sealed class Tarefa : Entity
             throw new DomainException("A branch base e a branch de implementação devem ser diferentes.");
         }
 
-        Status = StatusTarefa.EmAndamento;
-        EmAndamento = true;
-        DefinirPrazoInterno(prazoInterno);
-        _branches.Add(new TarefaBranch(TipoBranch.Base, nomeBase, null));
-        _branches.Add(new TarefaBranch(TipoBranch.Implementacao, nomeImplementacao, null));
+        GarantirPartes(partes);
+
+        if (_branches.Any(branch => string.Equals(branch.Nome, nomeImplementacao, StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        var registradaBase = _branches.FirstOrDefault(branch => string.Equals(branch.Nome, nomeBase, StringComparison.Ordinal));
+        if (registradaBase is { Tipo: TipoBranch.Implementacao })
+        {
+            throw new DomainException($"A branch '{nomeBase}' já está registrada nesta tarefa como branch de implementação e não pode ser usada como base.");
+        }
+
+        var retrabalhoAberto = RetrabalhosAbertos().MaxBy(retrabalho => retrabalho.Numero);
+        if (registradaBase is null)
+        {
+            registradaBase = new TarefaBranch(TipoBranch.Base, nomeBase, retrabalhoAberto?.Id, partes);
+            _branches.Add(registradaBase);
+        }
+
+        var registradaImplementacao = new TarefaBranch(TipoBranch.Implementacao, nomeImplementacao, retrabalhoAberto?.Id, partes);
+        _branches.Add(registradaImplementacao);
+
+        return (registradaBase, registradaImplementacao);
     }
 
     /// <summary>
@@ -412,6 +515,13 @@ public sealed class Tarefa : Entity
     /// <exception cref="DomainException">The task is not in progress nor in rework, or is already in progress</exception>
     public void Retomar()
     {
+        GarantirQuePodeRetomar();
+
+        EmAndamento = true;
+    }
+
+    private void GarantirQuePodeRetomar()
+    {
         if (Status == StatusTarefa.Bloqueada)
         {
             throw new DomainException("Desbloqueie a tarefa antes de iniciá-la.");
@@ -431,8 +541,6 @@ public sealed class Tarefa : Entity
         {
             throw new DomainException("A tarefa já está em andamento.");
         }
-
-        EmAndamento = true;
     }
 
     /// <summary>
@@ -504,13 +612,15 @@ public sealed class Tarefa : Entity
     }
 
     /// <summary>
-    /// Register a branch, linked to the open rework when there is one
+    /// Register a branch with the parts it belongs to, linked to the open rework when there is one. Checking or
+    /// creating the branch in the GitHub is up to the caller.
     /// </summary>
     /// <param name="tipo">Role of the branch</param>
     /// <param name="nome">Branch name (spaces at the ends are removed)</param>
+    /// <param name="partes">Parts of the branch (at least one)</param>
     /// <returns>The new branch, or <see langword="null"/> when the task already has a branch with this name</returns>
-    /// <exception cref="DomainException">The task is not in progress, blocked or in rework, or the name is empty</exception>
-    public TarefaBranch? AdicionarBranch(TipoBranch tipo, string nome)
+    /// <exception cref="DomainException">The task is not in progress, blocked or in rework, the name is invalid, no part was given, or an implementation branch is registered without a base branch</exception>
+    public TarefaBranch? AdicionarBranch(TipoBranch tipo, string nome, IReadOnlyCollection<ParteBranch> partes)
     {
         if (Status is not (StatusTarefa.EmAndamento or StatusTarefa.Bloqueada or StatusTarefa.Retrabalho))
         {
@@ -518,16 +628,35 @@ public sealed class Tarefa : Entity
         }
 
         var nomeDaBranch = NomeDaBranch(nome);
+        GarantirPartes(partes);
+
         if (_branches.Any(branch => string.Equals(branch.Nome, nomeDaBranch, StringComparison.Ordinal)))
         {
             return null;
         }
 
+        if (tipo == TipoBranch.Implementacao && BaseMaisRecente() is null)
+        {
+            throw new DomainException("Registre a branch base antes da branch de implementação.");
+        }
+
         var retrabalhoAberto = RetrabalhosAbertos().MaxBy(retrabalho => retrabalho.Numero);
-        var nova = new TarefaBranch(tipo, nomeDaBranch, retrabalhoAberto?.Id);
+        var nova = new TarefaBranch(tipo, nomeDaBranch, retrabalhoAberto?.Id, partes);
         _branches.Add(nova);
 
         return nova;
+    }
+
+    /// <summary>
+    /// Base branch registered most recently (the one a new implementation branch starts from)
+    /// </summary>
+    /// <returns>The base branch, or <see langword="null"/> when the task has none</returns>
+    public TarefaBranch? BaseMaisRecente()
+    {
+        // Branch ainda não gravada (Id 0) é a mais recente.
+        return _branches
+            .Where(branch => branch.Tipo == TipoBranch.Base)
+            .MaxBy(branch => branch.Id == 0 ? long.MaxValue : branch.Id);
     }
 
     /// <summary>
@@ -626,7 +755,69 @@ public sealed class Tarefa : Entity
             throw new DomainException($"O nome da branch deve ter no máximo {TarefaBranch.NomeMaxLength} caracteres.");
         }
 
+        if (MotivoDeNomeInvalidoNoGit(nomeDaBranch) is { } motivo)
+        {
+            throw new DomainException($"O nome da branch '{nomeDaBranch}' não é válido no Git: {motivo}.");
+        }
+
         return nomeDaBranch;
+    }
+
+    /// <summary>
+    /// Why the Git does not accept the name as a branch (rules of <c>git check-ref-format</c>), or
+    /// <see langword="null"/> when it does
+    /// </summary>
+    private static string? MotivoDeNomeInvalidoNoGit(string nome)
+    {
+        if (nome.Any(char.IsWhiteSpace))
+        {
+            return "não pode ter espaços";
+        }
+
+        if (nome.Any(char.IsControl))
+        {
+            return "não pode ter caracteres de controle";
+        }
+
+        foreach (var proibido in CaracteresProibidosNoGit)
+        {
+            if (nome.Contains(proibido, StringComparison.Ordinal))
+            {
+                return $"não pode ter '{proibido}'";
+            }
+        }
+
+        if (nome.Contains("..", StringComparison.Ordinal))
+        {
+            return "não pode ter '..'";
+        }
+
+        if (nome.Contains("@{", StringComparison.Ordinal))
+        {
+            return "não pode ter '@{'";
+        }
+
+        if (nome.StartsWith('-') || nome.StartsWith('/'))
+        {
+            return "não pode começar com '-' ou '/'";
+        }
+
+        if (nome.EndsWith('/') || nome.EndsWith('.') || nome.EndsWith(".lock", StringComparison.Ordinal))
+        {
+            return "não pode terminar com '/', '.' ou '.lock'";
+        }
+
+        return null;
+    }
+
+    private static readonly char[] CaracteresProibidosNoGit = ['~', '^', ':', '?', '*', '[', '\\'];
+
+    private static void GarantirPartes(IReadOnlyCollection<ParteBranch> partes)
+    {
+        if (partes.Count == 0)
+        {
+            throw new DomainException("Informe se a branch é do front, do back ou dos dois.");
+        }
     }
 
     private void LimparArquivamento()
