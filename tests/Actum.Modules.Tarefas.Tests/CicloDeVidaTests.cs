@@ -794,6 +794,24 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     }
 
     [Fact]
+    public async Task TarefaDaCargaInicialTemNovaBranchSugeridaAteRetomarComBranchAsync()
+    {
+        var tarefa = await NaCargaInicialAsync();
+        Assert.True((await LerTarefaAsync(Nome))!.NovaBranchSugerida);
+        LimparChamadas();
+
+        var resultado = await RetomarComBranchAsync(tarefa, Main, Feature, [ParteBranch.Back]);
+
+        Assert.Equal(TarefaResultadoStatus.Sucesso, resultado.Status);
+        Assert.Equal((StatusTarefa.EmAndamento, true), (resultado.Tarefa!.Status, resultado.Tarefa.EmAndamento));
+        Assert.Equal([$"sha:{RepositorioBack}:{Main}", $"criar:{RepositorioBack}:{Feature}:{ShaBack}"], _gitHub.Chamadas);
+        var lida = await LerTarefaAsync(Nome);
+        Assert.Equal([Main, Feature], lida!.Branches.OrderBy(b => b.Id).Select(b => b.Nome));
+        Assert.False(lida.NovaBranchSugerida);
+        AssertNenhumaChamadaAoAsana();
+    }
+
+    [Fact]
     public async Task TarefaDesarquivadaIniciadaDeNovoReaproveitaABaseRegistradaAsync()
     {
         var tarefa = await DesarquivadaAsync();

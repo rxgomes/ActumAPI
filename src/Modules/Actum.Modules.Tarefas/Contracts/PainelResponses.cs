@@ -91,7 +91,7 @@ public sealed record EmpresaResumoResponse(Guid Identifier, string Nome, string 
 /// <param name="Branches">Branches, indicating whether each was sent to the Asana</param>
 /// <param name="Retrabalhos">Reworks in order of number</param>
 /// <param name="Comentarios">Every comment, oldest first</param>
-/// <param name="NovaBranchSugerida">Whether a new implementation branch is suggested when resuming: the task is in rework and the open rework has no implementation branch yet (<c>POST /tarefas/{identifier}/retomar</c> with a body)</param>
+/// <param name="NovaBranchSugerida">Whether a new implementation branch is suggested when resuming: the task is in progress without any implementation branch (never started in the Actum, e.g. from the initial load), or in rework and the open rework has no implementation branch yet (<c>POST /tarefas/{identifier}/retomar</c> with a body)</param>
 public sealed record TarefaDetalheResponse(
     Guid Identifier,
     string Titulo,

@@ -256,7 +256,11 @@ A API SHALL expor `GET /tarefas/{identifier}/branches-base-recentes`, que devolv
 - **THEN** a resposta MUST ter status `400` com a mesma mensagem do retomar sem corpo, sem chamar o GitHub
 
 ### Requirement: Nova branch sugerida no detalhe
-`GET /tarefas/{identifier}` SHALL devolver `novaBranchSugerida`. O campo MUST ser `true` quando a tarefa está em `retrabalho` e o retrabalho aberto mais recente não tem nenhuma branch de implementação vinculada, e `false` nos demais casos.
+`GET /tarefas/{identifier}` SHALL devolver `novaBranchSugerida`. O campo MUST ser `true` quando a tarefa está `em_andamento` sem nenhuma branch de implementação (nunca iniciada no Actum, como as da carga inicial), ou quando está em `retrabalho` e o retrabalho aberto mais recente não tem nenhuma branch de implementação vinculada, e `false` nos demais casos.
+
+#### Scenario: Tarefa da carga inicial
+- **WHEN** a tarefa entrou pela carga inicial (`em_andamento`, sem branches)
+- **THEN** o detalhe MUST devolver `novaBranchSugerida = true`, e MUST passar a devolver `false` depois que uma branch de implementação for registrada pelo retomar ou por "Nova branch"
 
 #### Scenario: Retrabalho recém-aberto
 - **WHEN** a sincronização põe em `retrabalho` uma tarefa concluída que foi reaberta no Asana
@@ -267,5 +271,5 @@ A API SHALL expor `GET /tarefas/{identifier}/branches-base-recentes`, que devolv
 - **THEN** o detalhe MUST devolver `novaBranchSugerida = false`
 
 #### Scenario: Tarefa fora do retrabalho
-- **WHEN** a tarefa está `em_andamento`, `bloqueada`, na `entrada` ou `concluida`
+- **WHEN** a tarefa está `em_andamento` com branch de implementação, `bloqueada`, na `entrada` ou `concluida`
 - **THEN** o detalhe MUST devolver `novaBranchSugerida = false`

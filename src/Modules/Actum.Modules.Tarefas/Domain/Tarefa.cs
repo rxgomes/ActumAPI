@@ -164,13 +164,19 @@ public sealed class Tarefa : Entity
         .ToList();
 
     /// <summary>
-    /// Whether a new implementation branch is suggested when the task is resumed: the task is in rework and the most
-    /// recent open rework has no implementation branch linked to it yet
+    /// Whether a new implementation branch is suggested when the task is resumed: the task is in progress and has no
+    /// implementation branch at all (never started in the Actum, e.g. from the initial load), or it is in rework and
+    /// the most recent open rework has no implementation branch linked to it yet
     /// </summary>
     public bool NovaBranchSugerida
     {
         get
         {
+            if (Status == StatusTarefa.EmAndamento)
+            {
+                return !_branches.Any(branch => branch.Tipo == TipoBranch.Implementacao);
+            }
+
             if (Status != StatusTarefa.Retrabalho)
             {
                 return false;
