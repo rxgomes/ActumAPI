@@ -57,6 +57,16 @@ public abstract class SincronizacaoTestBase(PostgresFixture postgres) : IAsyncLi
 
     protected AsanaClientFalso Asana { get; } = null!;
 
+    /// <summary>
+    /// Git local simulado (sem clones: empresas sem configuração local não chamam o git)
+    /// </summary>
+    protected GitLocalFalso Git { get; } = new();
+
+    /// <summary>
+    /// Criação e remoção de worktrees sobre <see cref="Git"/>
+    /// </summary>
+    private protected WorktreesLocais Worktrees => new(Git, NullLogger<WorktreesLocais>.Instance);
+
     public async ValueTask InitializeAsync()
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);

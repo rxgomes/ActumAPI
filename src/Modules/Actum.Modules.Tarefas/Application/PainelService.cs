@@ -91,6 +91,8 @@ internal sealed class PainelService(TarefasDbContext context, TimeProvider timeP
         var tarefa = await context.Set<Tarefa>()
             .AsNoTracking()
             .Include(t => t.Branches)
+                .ThenInclude(branch => branch.Worktree)
+                    .ThenInclude(worktree => worktree!.Partes)
             .Include(t => t.Retrabalhos)
             .Include(t => t.Comentarios)
             .AsSplitQuery()

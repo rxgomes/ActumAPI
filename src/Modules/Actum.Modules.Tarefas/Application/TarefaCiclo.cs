@@ -17,6 +17,8 @@ internal static class TarefaCiclo
     {
         return context.Set<Tarefa>()
             .Include(tarefa => tarefa.Branches)
+                .ThenInclude(branch => branch.Worktree)
+                    .ThenInclude(worktree => worktree!.Partes)
             .Include(tarefa => tarefa.Retrabalhos)
             .AsSplitQuery()
             .SingleOrDefaultAsync(tarefa => tarefa.Identifier == identifier, cancellationToken);
@@ -57,6 +59,18 @@ internal static class TarefaCiclo
             branch.EnviadaAsanaEm,
             retrabalho?.Numero,
             branch.Partes,
-            branch.Tag);
+            branch.Tag,
+            branch.Worktree is { } worktree ? ParaResponse(worktree) : null);
+    }
+
+    public static WorktreeResponse ParaResponse(Worktree worktree)
+    {
+        return new WorktreeResponse(
+            worktree.Pasta,
+            worktree.Situacao,
+            worktree.PartesEmOrdem
+                .Select(parte => new WorktreeParteResponse(parte.Parte, parte.Caminho, parte.Situacao, parte.UltimoErro, parte.CriadoEm))
+                .ToList(),
+            WorktreesLocais.ComandoClaude(worktree.Pasta));
     }
 }

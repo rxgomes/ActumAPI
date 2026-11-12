@@ -972,7 +972,7 @@ public sealed class CicloDeVidaTests(PostgresFixture postgres) : SincronizacaoTe
     private async Task<T> TarefasAsync<T>(Func<ITarefaService, Task<T>> acao)
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
-        return await acao(new TarefaService(contexto, _gitHub));
+        return await acao(new TarefaService(contexto, _gitHub, Worktrees));
     }
 
     private async Task<T> ConclusaoAsync<T>(Func<IConclusaoService, Task<T>> acao)

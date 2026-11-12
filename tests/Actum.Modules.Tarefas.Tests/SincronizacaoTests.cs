@@ -40,7 +40,7 @@ public sealed class SincronizacaoTests(PostgresFixture postgres)
 
         await using (var contexto = TarefasDbContext.Criar(Postgres.DataSource))
         {
-            var service = new EmpresaService(contexto);
+            var service = new EmpresaService(contexto, new GitLocalFalso());
             var alterada = await service.AlterarAsync(aremas.Identifier, new AlterarEmpresaRequest("#abcdef", false), TestContext.Current.CancellationToken);
             Assert.NotNull(alterada);
 
@@ -60,7 +60,7 @@ public sealed class SincronizacaoTests(PostgresFixture postgres)
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
 
-        var resultado = await new EmpresaService(contexto).AlterarAsync(Guid.CreateVersion7(), new AlterarEmpresaRequest(null, true), TestContext.Current.CancellationToken);
+        var resultado = await new EmpresaService(contexto, new GitLocalFalso()).AlterarAsync(Guid.CreateVersion7(), new AlterarEmpresaRequest(null, true), TestContext.Current.CancellationToken);
 
         Assert.Null(resultado);
     }

@@ -107,6 +107,46 @@ public sealed class TarefaBranch : Entity
     }
 
     /// <summary>
+    /// Local worktrees of the branch; <see langword="null"/> when the branch never had them
+    /// </summary>
+    public Worktree? Worktree { get; private set; }
+
+    /// <summary>
+    /// Whether the branch has worktrees that were not removed
+    /// </summary>
+    public bool TemWorktreeAtivo => Worktree is { Ativo: true };
+
+    /// <summary>
+    /// Worktree to create or complete: a new one in <c>&lt;pastaWorktrees&gt;\&lt;branch&gt;</c> with the parts of the
+    /// branch, or the existing one (activated again, in the same folder, when it was removed)
+    /// </summary>
+    /// <param name="pastaWorktrees">Root folder of the worktrees of the company</param>
+    /// <exception cref="DomainException">The branch is not an implementation branch or has no parts</exception>
+    internal Worktree PrepararWorktree(string pastaWorktrees)
+    {
+        if (Tipo != TipoBranch.Implementacao)
+        {
+            throw new DomainException($"Só branches de implementação têm worktree. A branch '{Nome}' é base.");
+        }
+
+        if (Partes.Count == 0)
+        {
+            throw new DomainException($"A branch '{Nome}' não tem partes (front/back) e não pode ter worktree.");
+        }
+
+        if (Worktree is null)
+        {
+            Worktree = new Worktree(Path.Combine(pastaWorktrees, Domain.Worktree.PastaDaBranch(Nome)), Partes);
+        }
+        else
+        {
+            Worktree.Reativar();
+        }
+
+        return Worktree;
+    }
+
+    /// <summary>
     /// Identifier of the Asana tag, filled when sent
     /// </summary>
     public string? AsanaTagGid { get; private set; }

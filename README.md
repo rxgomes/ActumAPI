@@ -96,6 +96,34 @@ dotnet user-secrets set "GitHub:Token" "<seu-token>" --project src/Actum.Api
 
 As falhas do GitHub viram Problem Details: token ausente ou recusado, repositório inexistente ou sem acesso e branch recusada geram `400`; GitHub fora do ar, tempo esgotado ou limite de requisições esgotado geram `502`. Como no Asana, o token nunca é versionado, registrado em log nem devolvido pela API.
 
+## Worktrees locais por tarefa
+
+Depois de criar a branch de implementação no GitHub, o Actum cria um git worktree da branch no clone local de cada parte, lado a lado na pasta da tarefa:
+
+```
+<pastaWorktrees da empresa>\<branch com / trocado por ->\front
+<pastaWorktrees da empresa>\<branch com / trocado por ->\back
+```
+
+Assim cada tarefa tem as suas pastas e pode ter a sua sessão do Claude Code (`cd '<pasta da tarefa>'; claude`, devolvido em `worktree.comandoClaude`). Se a criação falhar (rede, credencial, branch em checkout no clone, pasta ocupada), a tarefa continua iniciada e a falha fica na parte (`situacao = falhou`, `erro`). `POST /tarefas/{id}/branches/{branchId}/worktree` refaz só o que faltou; `DELETE` no mesmo caminho remove os worktrees, e é recusado com `409` se houver alterações não commitadas ou commits não enviados.
+
+**Pré-requisitos no PC**
+
+- Git for Windows no `PATH` do usuário que executa o Actum. A API roda como esse usuário (`Actum-Iniciar.ps1`), então o `git fetch` usa as credenciais do Git Credential Manager. Nenhum comando espera interação: credencial expirada falha na hora, com a mensagem do git na parte.
+- Caminhos longos: `git config --global core.longpaths true`. Use uma `pastaWorktrees` curta (ex.: `E:\wt\aureum`), porque `node_modules` dentro de `...\front` passa fácil de 260 caracteres.
+
+**Configuração por empresa** (página Empresas ou `PATCH /empresas/{identifier}`)
+
+| Campo | Exemplo | Observação |
+|---|---|---|
+| `cloneFront` / `cloneBack` | `E:\src\aureum\erp-web` | raiz de um repositório git cujo `origin` é o `repositorioFront`/`repositorioBack` da empresa (conferido ao salvar) |
+| `pastaWorktrees` | `E:\wt\aureum` | caminho absoluto; criada quando necessário |
+| `arquivosFront` / `arquivosBack` | `[".env.development"]`, `["src\\Api\\appsettings.Development.json"]` | arquivos fora do git copiados do clone para cada worktree novo; precisam ser ignorados pelo git no clone e não sobrescrevem um arquivo já existente no worktree |
+
+Sem `pastaWorktrees` ou sem o clone de alguma parte da branch, a tarefa é iniciada como antes, sem worktree.
+
+**Tempos limite** (seção `Git`, em segundos, opcional): `TempoLimiteBuscaSegundos` (fetch, padrão 60), `TempoLimiteWorktreeSegundos` (criação e remoção, padrão 120) e `TempoLimiteSegundos` (demais, padrão 15). `Git:Executavel` troca o executável (padrão `git`).
+
 ## Configurar a Claude API (análise com IA)
 
 A análise da demanda (`POST /tarefas/{identifier}/analises`) usa a Claude API da Anthropic. Crie uma chave no Console da Anthropic (<https://platform.claude.com>, em **API keys**) e guarde-a em `dotnet user-secrets`, na chave `Claude:ApiKey`:
@@ -190,13 +218,15 @@ src/
   Actum.Api/                       # host: compõe os módulos, OpenAPI, health checks, CORS, erros
   Shared/
     Actum.Shared.Abstractions/     # contratos públicos (IModule, Entity, DomainException, PagedResult)
-    Actum.Shared.Infrastructure/   # base de persistência (ModuleDbContext, convenções de banco)
+    Actum.Shared.Infrastructure/   # base de persistência (ModuleDbContext, convenções de banco) e executor de processos
   Modules/                         # um projeto por módulo de negócio
     Actum.Modules.Asana/           # acesso à API do Asana (IAsanaClient), sem banco
+    Actum.Modules.Git/             # git de linha de comando nos clones locais (IGitLocal), sem banco
     Actum.Modules.Tarefas/         # empresas, tarefas, comentários, retrabalho e sincronização (schema tarefas)
 tests/
   Actum.Api.Tests/                 # health check, OpenAPI, erros, CORS e Asana no host
   Actum.Modules.Asana.Tests/       # cliente do Asana com HttpMessageHandler falso (sem rede)
+  Actum.Modules.Git.Tests/         # git real em pasta temporária (origem --bare + clone)
   Actum.Modules.Tarefas.Tests/     # sincronização e retrabalho, com IAsanaClient falso e banco temporário
   Actum.Shared.Infrastructure.Tests/  # convenções de banco e entidade base
 ```

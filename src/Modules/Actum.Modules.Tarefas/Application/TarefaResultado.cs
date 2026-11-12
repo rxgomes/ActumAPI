@@ -21,6 +21,11 @@ public enum TarefaResultadoStatus
     /// The task already has a branch with the same name
     /// </summary>
     BranchRepetida,
+
+    /// <summary>
+    /// The worktrees were not removed: a part has changes not committed or commits not pushed
+    /// </summary>
+    WorktreeComPendencias,
 }
 
 /// <summary>
@@ -29,8 +34,13 @@ public enum TarefaResultadoStatus
 /// </summary>
 /// <param name="Status">Outcome</param>
 /// <param name="Tarefa">Task after the action, present only when <paramref name="Status"/> is <see cref="TarefaResultadoStatus.Sucesso"/></param>
-/// <param name="Branch">Branch registered, present only for a successful branch registration</param>
-public sealed record TarefaResultado(TarefaResultadoStatus Status, TarefaCicloResponse? Tarefa = null, BranchResponse? Branch = null)
+/// <param name="Branch">Branch registered or changed, present only for a successful action on a branch</param>
+/// <param name="Detalhe">Why the action was not applied, in pt-BR, for <see cref="TarefaResultadoStatus.WorktreeComPendencias"/></param>
+public sealed record TarefaResultado(
+    TarefaResultadoStatus Status,
+    TarefaCicloResponse? Tarefa = null,
+    BranchResponse? Branch = null,
+    string? Detalhe = null)
 {
     /// <summary>
     /// No task (or branch) has the given identifier
@@ -46,10 +56,20 @@ public sealed record TarefaResultado(TarefaResultadoStatus Status, TarefaCicloRe
     /// The action was applied
     /// </summary>
     /// <param name="tarefa">Task after the action</param>
-    /// <param name="branch">Branch registered, for a branch registration</param>
+    /// <param name="branch">Branch registered or changed, for an action on a branch</param>
     /// <returns>Successful result</returns>
     public static TarefaResultado Sucesso(TarefaCicloResponse tarefa, BranchResponse? branch = null)
     {
         return new TarefaResultado(TarefaResultadoStatus.Sucesso, tarefa, branch);
+    }
+
+    /// <summary>
+    /// The worktrees were not removed because of changes or commits that would be lost
+    /// </summary>
+    /// <param name="detalhe">Pending items per part, in pt-BR</param>
+    /// <returns>Conflict result</returns>
+    public static TarefaResultado WorktreeComPendencias(string detalhe)
+    {
+        return new TarefaResultado(TarefaResultadoStatus.WorktreeComPendencias, Detalhe: detalhe);
     }
 }

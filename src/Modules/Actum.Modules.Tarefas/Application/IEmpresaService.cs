@@ -21,14 +21,17 @@ public interface IEmpresaService
     Task<IReadOnlyList<EmpresaResponse>> ListarAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Change the color and/or whether the company is synchronized; fields not sent are kept
+    /// Change the color, whether the company is synchronized, the GitHub repositories and the local configuration
+    /// (clones, worktrees folder, files to copy); fields not sent are kept. Nothing is saved when a field is invalid.
     /// </summary>
     /// <param name="identifier">Company identifier</param>
     /// <param name="request">Fields to change</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The changed company, or <see langword="null"/> when no company has the identifier</returns>
+    /// <exception cref="Actum.Shared.Abstractions.Domain.DomainException">A path is not absolute, a clone is not a git
+    /// repository of the GitHub repository of its part, or a file is not a relative path inside the repository</exception>
     /// <author>Ricardo Gomes</author>
     /// <created>2026-11-03</created>
-    /// <modified>2026-11-03</modified>
+    /// <modified>2026-11-12</modified>
     Task<EmpresaResponse?> AlterarAsync(Guid identifier, AlterarEmpresaRequest request, CancellationToken cancellationToken);
 }

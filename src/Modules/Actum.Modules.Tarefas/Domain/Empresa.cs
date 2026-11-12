@@ -15,6 +15,10 @@ public sealed class Empresa : Entity
 
     public const int RepositorioMaxLength = 200;
 
+    public const int CaminhoMaxLength = 260;
+
+    public const int ArquivosMaxCount = 20;
+
     /// <summary>
     /// Fixed palette; new companies get the next color, in creation order
     /// </summary>
@@ -72,6 +76,63 @@ public sealed class Empresa : Entity
     public string? Repositorio(ParteBranch parte)
     {
         return parte == ParteBranch.Front ? RepositorioFront : RepositorioBack;
+    }
+
+    /// <summary>
+    /// Folder of the local clone of the front-end repository; <see langword="null"/> when not defined
+    /// </summary>
+    public string? CloneFront { get; set; }
+
+    /// <summary>
+    /// Folder of the local clone of the back-end repository; <see langword="null"/> when not defined
+    /// </summary>
+    public string? CloneBack { get; set; }
+
+    /// <summary>
+    /// Root folder of the worktrees of the tasks of the company; <see langword="null"/> when not defined
+    /// </summary>
+    public string? PastaWorktrees { get; set; }
+
+    /// <summary>
+    /// Files outside the git copied from the front-end clone to each new worktree (paths relative to the repository)
+    /// </summary>
+    public List<string> ArquivosFront { get; set; } = [];
+
+    /// <summary>
+    /// Files outside the git copied from the back-end clone to each new worktree (paths relative to the repository)
+    /// </summary>
+    public List<string> ArquivosBack { get; set; } = [];
+
+    /// <summary>
+    /// Local clone of a part, or <see langword="null"/> when not defined
+    /// </summary>
+    /// <param name="parte">Part of the system</param>
+    /// <returns>Folder of the clone or <see langword="null"/></returns>
+    public string? Clone(ParteBranch parte)
+    {
+        return parte == ParteBranch.Front ? CloneFront : CloneBack;
+    }
+
+    /// <summary>
+    /// Files copied from the clone of a part to each new worktree
+    /// </summary>
+    /// <param name="parte">Part of the system</param>
+    /// <returns>Paths relative to the repository</returns>
+    public IReadOnlyList<string> Arquivos(ParteBranch parte)
+    {
+        return parte == ParteBranch.Front ? ArquivosFront : ArquivosBack;
+    }
+
+    /// <summary>
+    /// Whether the worktrees of a branch with these parts can be created: the company has the worktrees folder and
+    /// the clone of every part
+    /// </summary>
+    /// <param name="partes">Parts of the branch</param>
+    public bool TemConfiguracaoLocal(IReadOnlyCollection<ParteBranch> partes)
+    {
+        return !string.IsNullOrWhiteSpace(PastaWorktrees)
+            && partes.Count > 0
+            && partes.All(parte => !string.IsNullOrWhiteSpace(Clone(parte)));
     }
 
     /// <summary>

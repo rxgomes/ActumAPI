@@ -33,6 +33,8 @@ public sealed class TarefasModule : IModule
         services.AddScoped<IComentarioService, ComentarioService>();
         services.AddScoped<IRetrabalhoService, RetrabalhoService>();
         services.AddScoped<IAnotacaoService, AnotacaoService>();
+        services.AddScoped<WorktreesLocais>();
+        services.AddScoped<IWorktreeService, WorktreeService>();
 
         // Data de "hoje" do painel; os testes substituem por um relógio fixo.
         services.TryAddSingleton(TimeProvider.System);

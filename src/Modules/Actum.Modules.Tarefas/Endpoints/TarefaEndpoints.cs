@@ -113,9 +113,25 @@ public static class TarefaEndpoints
         group.MapDelete("/{identifier:guid}/branches/{branchIdentifier:guid}", RemoverBranchAsync)
             .WithName("RemoverBranch")
             .WithSummary("Excluir branch")
-            .WithDescription("Exclui uma branch ainda não enviada ao Asana (para corrigir erro de digitação). Branches enviadas não podem ser excluídas. A branch não é excluída no GitHub.")
+            .WithDescription("Exclui uma branch ainda não enviada ao Asana (para corrigir erro de digitação). Branches enviadas ou com worktree ativo no PC não podem ser excluídas. A branch não é excluída no GitHub.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/{identifier:guid}/branches/{branchIdentifier:guid}/worktree", CriarWorktreeAsync)
+            .WithName("CriarWorktree")
+            .WithSummary("Criar ou recriar worktree")
+            .WithDescription("Cria, no clone local de cada parte da branch de implementação, o worktree da branch em <pastaWorktrees>\\<branch>\\front e ...\\back, e copia do clone os arquivos fora do git configurados na empresa. Idempotente: as partes já criadas são mantidas; recria na mesma pasta um worktree removido. A falha numa parte não muda o status da resposta: ela fica na parte (situacao = falhou, erro). Exige a pasta dos worktrees e os clones das partes na empresa.")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapDelete("/{identifier:guid}/branches/{branchIdentifier:guid}/worktree", RemoverWorktreeAsync)
+            .WithName("RemoverWorktree")
+            .WithSummary("Remover worktree")
+            .WithDescription("Remove os worktrees da branch nos clones locais, sem forçar, e apaga a pasta da tarefa se ficar vazia. Recusado com 409, sem remover nada, quando alguma parte tem alterações não commitadas ou commits não enviados. Arquivo em uso (IDE aberta, servidor rodando) devolve 400.")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
 
         group.MapGet("/{identifier:guid}/conclusao/previa", ObterPreviaAsync)
             .WithName("ObterPreviaDaConclusao")
@@ -268,6 +284,39 @@ public static class TarefaEndpoints
         }
 
         return TypedResults.NoContent();
+    }
+
+    private static async Task<Results<Ok<BranchResponse>, ProblemHttpResult>> CriarWorktreeAsync(
+        Guid identifier,
+        Guid branchIdentifier,
+        IWorktreeService service,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await service.CriarAsync(identifier, branchIdentifier, cancellationToken);
+        if (resultado.Status == TarefaResultadoStatus.NaoEncontrada)
+        {
+            return TypedResults.Problem(detail: "Tarefa ou branch não encontrada.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        return TypedResults.Ok(resultado.Branch);
+    }
+
+    private static async Task<Results<Ok<BranchResponse>, ProblemHttpResult>> RemoverWorktreeAsync(
+        Guid identifier,
+        Guid branchIdentifier,
+        IWorktreeService service,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await service.RemoverAsync(identifier, branchIdentifier, cancellationToken);
+
+        return resultado.Status switch
+        {
+            TarefaResultadoStatus.NaoEncontrada => TypedResults.Problem(
+                detail: "Tarefa, branch ou worktree não encontrado.", statusCode: StatusCodes.Status404NotFound),
+            TarefaResultadoStatus.WorktreeComPendencias => TypedResults.Problem(
+                detail: resultado.Detalhe, statusCode: StatusCodes.Status409Conflict),
+            _ => TypedResults.Ok(resultado.Branch),
+        };
     }
 
     private static async Task<Results<Ok<ConclusaoPreviaResponse>, ProblemHttpResult>> ObterPreviaAsync(

@@ -670,7 +670,7 @@ public sealed class Tarefa : Entity
     /// </summary>
     /// <param name="identifier">Branch identifier</param>
     /// <returns><see langword="false"/> when the task has no branch with this identifier</returns>
-    /// <exception cref="DomainException">The branch was already sent to the Asana</exception>
+    /// <exception cref="DomainException">The branch was already sent to the Asana or has active worktrees</exception>
     public bool RemoverBranch(Guid identifier)
     {
         var branch = _branches.FirstOrDefault(b => b.Identifier == identifier);
@@ -682,6 +682,11 @@ public sealed class Tarefa : Entity
         if (branch.Enviada)
         {
             throw new DomainException($"A branch '{branch.Nome}' já foi enviada ao Asana como tag e não pode ser excluída.");
+        }
+
+        if (branch.TemWorktreeAtivo)
+        {
+            throw new DomainException($"A branch '{branch.Nome}' tem worktree no PC. Remova o worktree da branch antes de excluí-la.");
         }
 
         _branches.Remove(branch);

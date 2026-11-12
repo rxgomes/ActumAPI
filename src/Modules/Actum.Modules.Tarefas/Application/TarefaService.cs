@@ -9,9 +9,10 @@ namespace Actum.Modules.Tarefas.Application;
 /// <summary>
 /// Task lifecycle actions over <see cref="TarefasDbContext"/>; the rules live in <see cref="Tarefa"/>. Starting a
 /// task and registering a branch check or create the branches in the GitHub before saving: when the GitHub fails,
-/// nothing is saved.
+/// nothing is saved. After saving, the local worktrees of a new implementation branch are created
+/// (<see cref="WorktreesLocais"/>); a failure there is recorded in the worktree and does not fail the action.
 /// </summary>
-internal sealed class TarefaService(TarefasDbContext context, IGitHubClient gitHub) : ITarefaService
+internal sealed class TarefaService(TarefasDbContext context, IGitHubClient gitHub, WorktreesLocais worktrees) : ITarefaService
 {
     private readonly BranchesNoGitHub _branchesNoGitHub = new(gitHub);
 
@@ -38,6 +39,7 @@ internal sealed class TarefaService(TarefasDbContext context, IGitHubClient gitH
         await _branchesNoGitHub.CriarImplementacaoAsync(empresa, branchImplementacao.Partes, branchBase.Nome, branchImplementacao.Nome, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
+        await CriarWorktreesAsync(empresa, branchImplementacao, cancellationToken);
 
         return TarefaResultado.Sucesso(TarefaCiclo.ParaResponse(tarefa));
     }
@@ -94,6 +96,7 @@ internal sealed class TarefaService(TarefasDbContext context, IGitHubClient gitH
         await _branchesNoGitHub.CriarImplementacaoAsync(empresa, branchImplementacao.Partes, branchBase.Nome, branchImplementacao.Nome, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
+        await CriarWorktreesAsync(empresa, branchImplementacao, cancellationToken);
 
         return TarefaResultado.Sucesso(TarefaCiclo.ParaResponse(tarefa));
     }
@@ -161,6 +164,7 @@ internal sealed class TarefaService(TarefasDbContext context, IGitHubClient gitH
         }
 
         await context.SaveChangesAsync(cancellationToken);
+        await CriarWorktreesAsync(empresa, branch, cancellationToken);
 
         return TarefaResultado.Sucesso(TarefaCiclo.ParaResponse(tarefa), TarefaCiclo.ParaResponse(tarefa, branch));
     }
@@ -176,6 +180,17 @@ internal sealed class TarefaService(TarefasDbContext context, IGitHubClient gitH
         await context.SaveChangesAsync(cancellationToken);
 
         return TarefaResultado.Sucesso(TarefaCiclo.ParaResponse(tarefa));
+    }
+
+    /// <summary>
+    /// Create the worktrees of an implementation branch already saved, and save the result (created or failed)
+    /// </summary>
+    private async Task CriarWorktreesAsync(Empresa empresa, TarefaBranch branch, CancellationToken cancellationToken)
+    {
+        if (await worktrees.CriarAsync(empresa, branch, cancellationToken) is not null)
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private Task<Empresa> EmpresaDaTarefaAsync(Tarefa tarefa, CancellationToken cancellationToken)

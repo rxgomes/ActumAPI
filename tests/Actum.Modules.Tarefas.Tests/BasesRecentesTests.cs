@@ -81,6 +81,6 @@ public sealed class BasesRecentesTests(PostgresFixture postgres) : Sincronizacao
     private async Task<T> TarefasAsync<T>(Func<ITarefaService, Task<T>> acao)
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
-        return await acao(new TarefaService(contexto, _gitHub));
+        return await acao(new TarefaService(contexto, _gitHub, Worktrees));
     }
 }

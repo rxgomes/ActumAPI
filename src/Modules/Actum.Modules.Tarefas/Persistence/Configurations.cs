@@ -17,6 +17,13 @@ internal sealed class EmpresaConfiguration : IEntityTypeConfiguration<Empresa>
         builder.Property(empresa => empresa.Cor).HasMaxLength(Empresa.CorLength);
         builder.Property(empresa => empresa.RepositorioFront).HasMaxLength(Empresa.RepositorioMaxLength);
         builder.Property(empresa => empresa.RepositorioBack).HasMaxLength(Empresa.RepositorioMaxLength);
+        builder.Property(empresa => empresa.CloneFront).HasMaxLength(Empresa.CaminhoMaxLength);
+        builder.Property(empresa => empresa.CloneBack).HasMaxLength(Empresa.CaminhoMaxLength);
+        builder.Property(empresa => empresa.PastaWorktrees).HasMaxLength(Empresa.CaminhoMaxLength);
+
+        // Default só para as linhas existentes na migration; a aplicação sempre envia a lista (vazia incluída).
+        builder.Property(empresa => empresa.ArquivosFront).HasDefaultValueSql("'{}'::text[]").ValueGeneratedNever();
+        builder.Property(empresa => empresa.ArquivosBack).HasDefaultValueSql("'{}'::text[]").ValueGeneratedNever();
 
         // Default só para inclusões por SQL; a aplicação sempre envia o valor (false incluído).
         builder.Property(empresa => empresa.Sincronizar).HasDefaultValue(true).ValueGeneratedNever();
@@ -151,6 +158,52 @@ internal sealed class TarefaBranchConfiguration : IEntityTypeConfiguration<Taref
         builder.Ignore(branch => branch.Enviada);
         builder.Ignore(branch => branch.Partes);
         builder.Ignore(branch => branch.Tag);
+        builder.Ignore(branch => branch.TemWorktreeAtivo);
+
+        builder.HasOne(branch => branch.Worktree)
+            .WithOne()
+            .HasForeignKey<Worktree>(worktree => worktree.TarefaBranchId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+/// <summary>
+/// Mapping of <see cref="Worktree"/> to the <c>worktree</c> table
+/// </summary>
+internal sealed class WorktreeConfiguration : IEntityTypeConfiguration<Worktree>
+{
+    public void Configure(EntityTypeBuilder<Worktree> builder)
+    {
+        builder.Property(worktree => worktree.Pasta).HasMaxLength(Worktree.CaminhoMaxLength);
+
+        builder.HasMany(worktree => worktree.Partes)
+            .WithOne()
+            .HasForeignKey(parte => parte.WorktreeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Ignore(worktree => worktree.Ativo);
+        builder.Ignore(worktree => worktree.PartesEmOrdem);
+        builder.Ignore(worktree => worktree.Situacao);
+    }
+}
+
+/// <summary>
+/// Mapping of <see cref="WorktreeParte"/> to the <c>worktree_parte</c> table
+/// </summary>
+internal sealed class WorktreeParteConfiguration : IEntityTypeConfiguration<WorktreeParte>
+{
+    public void Configure(EntityTypeBuilder<WorktreeParte> builder)
+    {
+        builder.Property(parte => parte.Parte)
+            .HasConversion(new EnumSnakeCaseConverter<ParteBranch>())
+            .HasMaxLength(WorktreeParte.ParteMaxLength);
+        builder.Property(parte => parte.Situacao)
+            .HasConversion(new EnumSnakeCaseConverter<SituacaoWorktree>())
+            .HasMaxLength(WorktreeParte.SituacaoMaxLength);
+        builder.Property(parte => parte.Caminho).HasMaxLength(Worktree.CaminhoMaxLength);
+        builder.Property(parte => parte.UltimoErro).HasMaxLength(WorktreeParte.ErroMaxLength);
+
+        builder.HasIndex(parte => new { parte.WorktreeId, parte.Parte }).IsUnique();
     }
 }
 
