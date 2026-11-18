@@ -35,7 +35,7 @@
 
 - [x] 6.1 Documentar no OpenAPI os campos e os endpoints novos e conferir em `http://localhost:5180/openapi/v1.json` que `cloneFront`, `pastaWorktrees`, `arquivosFront`, `worktree`, `comandoClaude` e as duas rotas `.../worktree` aparecem
 - [x] 6.2 Documentar no README (ou em `docs/especificacao-fase1.md`) os pré-requisitos (git no `PATH`, credenciais no Git Credential Manager, `git config --global core.longpaths true`, pasta de worktrees curta) e a configuração das empresas
-- [ ] 6.3 Verificação integrada: com uma empresa real configurada, iniciar uma tarefa com front e back e conferir as pastas, `git worktree list` nos dois clones, o upstream (`git -C <worktree> status -sb`) e os arquivos copiados. Abrir o Claude Code com o `comandoClaude`, fazer um commit sem enviar e confirmar o `409` na remoção. Depois do `git push`, confirmar a remoção. Rodar `dotnet build` e `dotnet test` sem falhas
+- [x] 6.3 Verificação integrada: com uma empresa real configurada, iniciar uma tarefa com front e back e conferir as pastas, `git worktree list` nos dois clones, o upstream (`git -C <worktree> status -sb`) e os arquivos copiados. Abrir o Claude Code com o `comandoClaude`, fazer um commit sem enviar e confirmar o `409` na remoção. Depois do `git push`, confirmar a remoção. Rodar `dotnet build` e `dotnet test` sem falhas
 
 ## Workflow follow-up
 
