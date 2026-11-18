@@ -6,11 +6,13 @@
 
   <ItemGroup>
     <PackageReference Include="Anthropic" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Actum.Modules.Claude.Tests" />
     <InternalsVisibleTo Include="Actum.Api.Tests" />
+    <InternalsVisibleTo Include="Actum.Modules.Tarefas.Tests" />
   </ItemGroup>
 
 </Project>

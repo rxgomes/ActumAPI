@@ -201,6 +201,61 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AnaliseComFontesDevolveAsFontesEmSnakeCaseAsync()
+    {
+        ResponderHistorico();
+        ResponderEstruturado("Objetivo", ["Item"], []);
+
+        var (status, corpo, _) = await EnviarAsync(
+            HttpMethod.Post, $"/tarefas/{_tarefa}/analises", new { modo = "tarefa", descricao = true, comentarios = false, anexos = Array.Empty<string>() });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        var fontes = corpo.GetProperty("fontes");
+        Assert.Equal("tarefa", fontes.GetProperty("modo").GetString());
+        Assert.True(fontes.GetProperty("descricao").GetBoolean());
+        Assert.False(fontes.GetProperty("comentarios").GetBoolean());
+        Assert.Empty(fontes.GetProperty("anexos").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, fontes.GetProperty("prompt").ValueKind);
+    }
+
+    [Fact]
+    public async Task AnaliseSemCorpoGravaAsFontesPadraoAsync()
+    {
+        ResponderHistorico();
+        ResponderEstruturado("Objetivo", ["Item"], []);
+
+        var (status, corpo, _) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", null);
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.True(corpo.GetProperty("fontes").GetProperty("descricao").GetBoolean());
+        Assert.True(corpo.GetProperty("fontes").GetProperty("comentarios").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("{\"modo\":\"tarefa\",\"descricao\":false,\"comentarios\":false,\"anexos\":[]}", "Fontes", "Escolha ao menos uma fonte para a análise.")]
+    [InlineData("{\"modo\":\"prompt\",\"prompt\":\"  \"}", "Prompt", "Escreva o prompt da análise.")]
+    [InlineData("{\"anexos\":[\"a1\",\"a1\"]}", "Anexos", "O mesmo anexo foi escolhido mais de uma vez.")]
+    public async Task FontesInvalidasRetornam400PorCampoSemChamarAsanaNemAnthropicAsync(string json, string campo, string mensagem)
+    {
+        var (status, corpo, tipo) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", JsonDocument.Parse(json).RootElement);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(ProblemJson, tipo);
+        Assert.Equal(mensagem, corpo.GetProperty("errors").GetProperty(campo)[0].GetString());
+        Assert.Empty(_anthropic.Requisicoes);
+    }
+
+    [Fact]
+    public async Task PromptLongoDemaisRetorna400NoCampoPromptAsync()
+    {
+        var (status, corpo, _) = await EnviarAsync(HttpMethod.Post, $"/tarefas/{_tarefa}/analises", new { modo = "prompt", prompt = new string('x', 20001) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("20000", corpo.GetProperty("errors").GetProperty("Prompt")[0].GetString());
+        Assert.Empty(_anthropic.Requisicoes);
+    }
+
+    [Fact]
     public async Task MarcacaoSemConcluidoRetornaErroPorCampoAsync()
     {
         var (status, corpo, tipo) = await EnviarAsync(HttpMethod.Patch, $"/tarefas/{_tarefa}/analises/itens/{Guid.NewGuid()}", new { });

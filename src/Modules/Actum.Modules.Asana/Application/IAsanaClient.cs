@@ -141,6 +141,21 @@ public interface IAsanaClient
     Task<AsanaDownloadDoAnexo?> ObterDownloadDoAnexoAsync(string anexoGid, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Download now the bytes of an attachment, with the task it belongs to. The Asana token is never sent to the
+    /// (temporary) download address. Fails with <see cref="AsanaAnexoGrandeDemaisException"/> when the file passes
+    /// <paramref name="tamanhoMaximo"/>, with <see cref="AsanaRequisicaoRecusadaException"/> when the Asana offers no
+    /// download address (external files) and with <see cref="AsanaIndisponivelException"/> when the download fails.
+    /// </summary>
+    /// <param name="anexoGid">Attachment identifier</param>
+    /// <param name="tamanhoMaximo">Maximum size accepted, in bytes; the download stops when it is passed</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The attachment content, or <see langword="null"/> when the attachment does not exist (deleted)</returns>
+    /// <author>Ricardo Gomes</author>
+    /// <created>2026-11-18</created>
+    /// <modified>2026-11-18</modified>
+    Task<AsanaConteudoDoAnexo?> BaixarAnexoAsync(string anexoGid, long tamanhoMaximo, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Publish a comment on a task, mentioning the given users at the beginning (they are notified by the Asana).
     /// The text is published exactly as typed, with its line breaks. Fails with
     /// <see cref="AsanaRequisicaoRecusadaException"/> when the Asana rejects it or the task no longer exists.

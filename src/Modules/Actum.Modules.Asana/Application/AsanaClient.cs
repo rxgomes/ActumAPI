@@ -31,6 +31,8 @@ internal sealed class AsanaClient(HttpClient httpClient, IConfiguration configur
 
     public static readonly TimeSpan TempoLimiteDoUpload = TimeSpan.FromMinutes(5);
 
+    public static readonly TimeSpan TempoLimiteDoDownload = TimeSpan.FromMinutes(2);
+
     private const string CamposDaTarefa =
         "name,notes,html_notes,due_on,completed,modified_at,permalink_url,projects.name,tags.name,assignee";
 
@@ -203,6 +205,82 @@ internal sealed class AsanaClient(HttpClient httpClient, IConfiguration configur
 
         static Uri? Endereco(string? valor) =>
             Uri.TryCreate(valor, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri : null;
+    }
+
+    public async Task<AsanaConteudoDoAnexo?> BaixarAnexoAsync(string anexoGid, long tamanhoMaximo, CancellationToken cancellationToken)
+    {
+        var envelope = await EnviarAsync<DownloadJson>(
+            HttpMethod.Get, $"attachments/{Escapar(anexoGid)}?opt_fields=name,download_url,parent", null, true, cancellationToken);
+        if (envelope is null)
+        {
+            return null;
+        }
+
+        var anexo = Dados(envelope);
+        var nome = anexo.Name ?? string.Empty;
+        if (!Uri.TryCreate(anexo.DownloadUrl, UriKind.Absolute, out var endereco) || endereco.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new AsanaRequisicaoRecusadaException($"O Asana não oferece um endereço para baixar o arquivo {nome}.");
+        }
+
+        var conteudo = await BaixarAsync(endereco, nome, tamanhoMaximo, cancellationToken);
+
+        return new AsanaConteudoDoAnexo(nome, anexo.Parent?.Gid, conteudo);
+    }
+
+    /// <summary>
+    /// Download a file from a signed address of another host: no <c>Authorization</c> header (the Asana token must
+    /// not leave the Asana), body read in chunks and interrupted when it passes <paramref name="tamanhoMaximo"/>
+    /// </summary>
+    private async Task<byte[]> BaixarAsync(Uri endereco, string nome, long tamanhoMaximo, CancellationToken cancellationToken)
+    {
+        using var limite = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limite.CancelAfter(TempoLimiteDoDownload);
+
+        try
+        {
+            using var requisicao = new HttpRequestMessage(HttpMethod.Get, endereco);
+            using var resposta = await httpClient.SendAsync(requisicao, HttpCompletionOption.ResponseHeadersRead, limite.Token);
+            if (!resposta.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Download do anexo respondeu {Status}", (int)resposta.StatusCode);
+                throw new AsanaIndisponivelException();
+            }
+
+            if (resposta.Content.Headers.ContentLength > tamanhoMaximo)
+            {
+                throw new AsanaAnexoGrandeDemaisException(nome, tamanhoMaximo);
+            }
+
+            await using var corpo = await resposta.Content.ReadAsStreamAsync(limite.Token);
+            using var memoria = new MemoryStream();
+            var buffer = new byte[81920];
+            int lidos;
+            while ((lidos = await corpo.ReadAsync(buffer, limite.Token)) > 0)
+            {
+                if (memoria.Length + lidos > tamanhoMaximo)
+                {
+                    throw new AsanaAnexoGrandeDemaisException(nome, tamanhoMaximo);
+                }
+
+                memoria.Write(buffer, 0, lidos);
+            }
+
+            return memoria.ToArray();
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AsanaIndisponivelException(ex);
+        }
+        catch (IOException ex)
+        {
+            throw new AsanaIndisponivelException(ex);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Tempo limite do download.
+            throw new AsanaIndisponivelException(ex);
+        }
     }
 
     public async Task<AsanaStory> ComentarAsync(string tarefaGid, string texto, IReadOnlyList<string> mencoes, CancellationToken cancellationToken)

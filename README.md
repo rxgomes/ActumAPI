@@ -138,10 +138,14 @@ Confira com `GET /claude/situacao` (`"configurado": true`). A chave nunca é ver
 |---|---|---|
 | `Claude:Modelo` | `claude-opus-5-5` | Modelo das análises (ex.: `claude-sonnet-5-5` para baratear). |
 | `Claude:Esforco` | `medium` | Profundidade do raciocínio: `low`, `medium`, `high` ou `max`. |
-| `Claude:MaxTokens` | `16000` | Limite de tokens da resposta. |
+| `Claude:MaxTokens` | `32000` | Limite de tokens da resposta. |
 | `Claude:NovasTentativas` | `2` | Novas tentativas do SDK em `429`, `529` e `5xx`. |
+| `Claude:Arquivos:MaxMbDocumento` | `20` | Tamanho máximo de um anexo PDF, de texto, Word ou Excel enviado à análise. |
+| `Claude:Arquivos:MaxMbImagem` | `5` | Tamanho máximo de uma imagem anexa (PNG, JPEG, GIF, WEBP). |
+| `Claude:Arquivos:MaxMbTotal` | `20` | Soma máxima dos anexos de uma análise (a Claude API aceita até 32 MB por requisição, e o base64 aumenta cerca de 33%). |
+| `Claude:Arquivos:MaxCaracteresDeTexto` | `300000` | Limite do texto extraído de um anexo de texto, Word ou Excel; acima dele o anexo é recusado, nunca cortado. |
 
-Cada análise é uma chamada paga e envia à Anthropic o conteúdo da tarefa (título, descrição, projetos, comentários e retrabalhos); ela só acontece quando o usuário pede. Se o modelo recusar por política, a Anthropic refaz a chamada com o modelo de fallback recomendado (`fallbacks: "default"`), e o modelo gravado na análise é o que respondeu. Chave ausente ou recusada, conta sem créditos e recusa do modelo geram `400`; Anthropic fora do ar, limite de uso e resposta incompleta geram `502`.
+Cada análise é uma chamada paga e envia à Anthropic as fontes escolhidas: sempre empresa, título e projetos, e, conforme o pedido, a descrição, os comentários com os retrabalhos, os anexos baixados do Asana na hora (PDF e imagens como conteúdo nativo; texto, `.docx` e `.xlsx` como texto extraído) e o prompt escrito pelo usuário. Sem corpo, o `POST` envia a descrição e os comentários; ela só acontece quando o usuário pede. Se o modelo recusar por política, a Anthropic refaz a chamada com o modelo de fallback recomendado (`fallbacks: "default"`), e o modelo gravado na análise é o que respondeu. Chave ausente ou recusada, conta sem créditos e recusa do modelo geram `400`; Anthropic fora do ar, limite de uso e resposta incompleta geram `502`.
 
 ## Executar a API
 

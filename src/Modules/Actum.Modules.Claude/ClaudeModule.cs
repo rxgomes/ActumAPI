@@ -23,6 +23,9 @@ public sealed class ClaudeModule : IModule
         services.AddHttpClient<IAnalisadorDeDemanda, AnalisadorDeDemanda>(AnalisadorDeDemanda.Configurar)
             .RedactLoggedHeaders(_ => true);
 
+        // Regras dos anexos que a análise lê (tipos e limites de Claude:Arquivos), usadas também pela lista de anexos.
+        services.AddSingleton<IArquivosDaAnalise, ArquivosDaAnalise>();
+
         // ClaudeException lançada por qualquer endpoint (inclusive de outros módulos) vira 400/502.
         services.AddExceptionHandler<ClaudeExceptionHandler>();
 

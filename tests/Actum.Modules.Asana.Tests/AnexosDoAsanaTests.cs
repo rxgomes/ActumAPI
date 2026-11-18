@@ -1,6 +1,7 @@
 using System.Net;
 using Actum.Modules.Asana.Application;
 using Actum.Modules.Asana.Contracts;
+using Actum.Modules.Asana.Errors;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -103,6 +104,75 @@ public sealed class AnexosDoAsanaTests
         _asana.Responder(HttpStatusCode.NotFound, new { errors = new[] { new { message = "Not found" } } });
 
         Assert.Null(await Criar().ObterDownloadDoAnexoAsync("a1", Ct));
+    }
+
+    [Fact]
+    public async Task ConteudoDoAnexoEBaixadoSemOTokenAsync()
+    {
+        byte[] bytes = [1, 2, 3, 4];
+        _asana
+            .Responder(HttpStatusCode.OK, new
+            {
+                data = new { gid = "a1", name = "especificacao.pdf", download_url = "https://s3.amazonaws.com/asana/especificacao.pdf?X-Amz-Expires=120", parent = new { gid = Tarefa } },
+            })
+            .ResponderBytes(bytes);
+
+        var conteudo = await Criar().BaixarAnexoAsync("a1", 1024, Ct);
+
+        Assert.Equal("especificacao.pdf", conteudo!.Nome);
+        Assert.Equal(Tarefa, conteudo.TarefaGid);
+        Assert.Equal(bytes, conteudo.Conteudo);
+        Assert.Equal("https://app.asana.com/api/1.0/attachments/a1?opt_fields=name,download_url,parent", _asana.Requisicoes[0].Uri.ToString());
+        Assert.NotNull(_asana.Requisicoes[0].Autorizacao);
+        Assert.Equal("s3.amazonaws.com", _asana.Requisicoes[1].Uri.Host);
+        Assert.Null(_asana.Requisicoes[1].Autorizacao);
+    }
+
+    [Fact]
+    public async Task ConteudoDeAnexoExcluidoENuloAsync()
+    {
+        _asana.Responder(HttpStatusCode.NotFound, new { errors = new[] { new { message = "Not found" } } });
+
+        Assert.Null(await Criar().BaixarAnexoAsync("a1", 1024, Ct));
+    }
+
+    [Fact]
+    public async Task ArquivoMaiorQueOMaximoInterrompeODownloadAsync()
+    {
+        _asana
+            .Responder(HttpStatusCode.OK, new
+            {
+                data = new { gid = "a1", name = "grande.pdf", download_url = "https://s3.amazonaws.com/asana/grande.pdf", parent = new { gid = Tarefa } },
+            })
+            .ResponderBytes(new byte[2048]);
+
+        var erro = await Assert.ThrowsAsync<AsanaAnexoGrandeDemaisException>(() => Criar().BaixarAnexoAsync("a1", 1024, Ct));
+
+        Assert.Contains("grande.pdf", erro.Message);
+    }
+
+    [Fact]
+    public async Task FalhaNoDownloadEIndisponibilidadeAsync()
+    {
+        _asana
+            .Responder(HttpStatusCode.OK, new
+            {
+                data = new { gid = "a1", name = "x.pdf", download_url = "https://s3.amazonaws.com/asana/x.pdf", parent = new { gid = Tarefa } },
+            })
+            .Responder(HttpStatusCode.Forbidden);
+
+        await Assert.ThrowsAsync<AsanaIndisponivelException>(() => Criar().BaixarAnexoAsync("a1", 1024, Ct));
+    }
+
+    [Fact]
+    public async Task ArquivoExternoNaoPodeSerBaixadoAsync()
+    {
+        _asana.Responder(HttpStatusCode.OK, new
+        {
+            data = new { gid = "a2", name = "planilha", download_url = (string?)null, parent = new { gid = Tarefa } },
+        });
+
+        await Assert.ThrowsAsync<AsanaRequisicaoRecusadaException>(() => Criar().BaixarAnexoAsync("a2", 1024, Ct));
     }
 
     private AsanaClient Criar()

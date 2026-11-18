@@ -3,6 +3,8 @@ using Actum.Modules.Tarefas.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 
 namespace Actum.Modules.Tarefas.Endpoints;
@@ -28,7 +30,8 @@ public static class AnaliseEndpoints
         group.MapPost("/", AnalisarAsync)
             .WithName("AnalisarTarefa")
             .WithSummary("Analisar a demanda com IA")
-            .WithDescription("Envia à Claude API o contexto completo da tarefa (empresa, título, descrição, projetos, comentários e retrabalhos) e grava o objetivo, o checklist e as dúvidas como nova versão atual. Itens iguais a itens marcados na versão anterior já entram marcados. Chamada paga; pode levar dezenas de segundos.")
+            .WithDescription("Envia à Claude API a empresa, o título e os projetos da tarefa e as fontes escolhidas no corpo (opcional): no modo tarefa, a descrição, os comentários com os retrabalhos e anexos do Asana (PDF, imagens, texto, Word e Excel); no modo prompt, o texto escrito pelo usuário com os anexos que ele cita. Sem corpo, envia a descrição e os comentários. Grava o objetivo, o checklist, os testes, as dúvidas e as regras, com origem e trecho, e as fontes usadas como nova versão atual. Itens iguais a itens marcados na versão anterior já entram marcados. Chamada paga; pode levar dezenas de segundos, mais com anexos.")
+            .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -51,17 +54,19 @@ public static class AnaliseEndpoints
         return endpoints;
     }
 
-    private static async Task<Results<Created<AnaliseResponse>, ProblemHttpResult>> AnalisarAsync(
+    private static async Task<Results<Created<AnaliseResponse>, ValidationProblem, ProblemHttpResult>> AnalisarAsync(
         Guid identifier,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] FontesDaAnaliseRequest? fontes,
         IAnaliseService service,
         CancellationToken cancellationToken)
     {
-        var resultado = await service.AnalisarAsync(identifier, cancellationToken);
+        var resultado = await service.AnalisarAsync(identifier, fontes, cancellationToken);
 
         return resultado.Status switch
         {
             AnaliseResultadoStatus.NaoEncontrada => NaoEncontrada(TarefaNaoEncontrada),
             AnaliseResultadoStatus.EmAndamento => TypedResults.Problem(detail: AnaliseEmAndamento, statusCode: StatusCodes.Status409Conflict),
+            AnaliseResultadoStatus.FontesInvalidas => TypedResults.ValidationProblem(resultado.Erros!),
             _ => TypedResults.Created((string?)null, resultado.Analise),
         };
     }

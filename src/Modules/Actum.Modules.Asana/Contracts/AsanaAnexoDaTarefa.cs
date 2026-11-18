@@ -20,3 +20,11 @@ public sealed record AsanaAnexoDaTarefa(string Gid, string Nome, DateTime Criado
 /// open the file; <see langword="null"/> when the Asana offers neither
 /// </param>
 public sealed record AsanaDownloadDoAnexo(string Nome, string? TarefaGid, Uri? Endereco);
+
+/// <summary>
+/// Content of an attachment, downloaded now from the Asana
+/// </summary>
+/// <param name="Nome">File name</param>
+/// <param name="TarefaGid">Identifier of the task (or other object) the file is attached to; <see langword="null"/> when unknown</param>
+/// <param name="Conteudo">File bytes</param>
+public sealed record AsanaConteudoDoAnexo(string Nome, string? TarefaGid, byte[] Conteudo);

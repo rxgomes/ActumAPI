@@ -1,6 +1,9 @@
+using Actum.Modules.Asana.Contracts;
+using Actum.Modules.Claude.Application;
 using Actum.Modules.Claude.Contracts;
 using Actum.Modules.Claude.Errors;
 using Actum.Modules.Tarefas.Application;
+using Actum.Modules.Tarefas.Contracts;
 using Actum.Modules.Tarefas.Domain;
 using Actum.Modules.Tarefas.Persistence;
 using Actum.Shared.Abstractions.Domain;
@@ -26,6 +29,11 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
 
     private readonly RelogioAjustavel _relogio = new(Agora);
 
+    /// <summary>
+    /// Regras reais dos anexos legíveis pela análise, com os limites padrão
+    /// </summary>
+    internal static readonly ArquivosDaAnalise Arquivos = new(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -34,7 +42,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         var tarefa = await TarefaComComentariosAsync();
         _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("Abater o IPI.", ["Ajustar cálculo", "Criar teste"], ["Vale para notas antigas?"]);
 
-        var resultado = await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        var resultado = await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
         Assert.Equal(AnaliseResultadoStatus.Sucesso, resultado.Status);
         var analise = resultado.Analise!;
@@ -69,7 +77,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
             1000,
             200);
 
-        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
 
         Assert.Equal(["Front", "Back: cálculo", "Back: integração TecnoSpeed"], analise.Checklist.Select(grupo => grupo.Nome));
         Assert.Equal([1, 2, 1], analise.Checklist.Select(grupo => grupo.Itens.Count));
@@ -84,7 +92,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         Assert.True(marcado.Item!.Concluido);
 
         // Na reanálise, o teste com o mesmo texto já vem marcado.
-        var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
         Assert.True(Assert.Single(segunda.Testes).Concluido);
     }
 
@@ -93,16 +101,16 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     {
         var tarefa = await TarefaComComentariosAsync();
 
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
         var demanda = Assert.Single(_ia.Demandas);
         Assert.Equal("Aureum-ERP", demanda.Empresa);
         Assert.Equal($"Tarefa {Nome}", demanda.Titulo);
         Assert.Equal($"notas {Nome}", demanda.Descricao);
         Assert.Equal("Projeto A, Projeto B", demanda.Projetos);
-        Assert.Equal(["Primeiro", "Segundo"], demanda.Comentarios.Select(comentario => comentario.Texto));
-        Assert.Equal("Ana", demanda.Comentarios[0].Autor);
-        Assert.Empty(demanda.Retrabalhos);
+        Assert.Equal(["Primeiro", "Segundo"], demanda.Comentarios!.Select(comentario => comentario.Texto));
+        Assert.Equal("Ana", demanda.Comentarios![0].Autor);
+        Assert.Empty(demanda.Retrabalhos!);
     }
 
     [Fact]
@@ -122,11 +130,11 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         await SincronizarAsync();
         var tarefa = (await LerTarefaAsync(Nome))!.Identifier;
 
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
-        var retrabalho = Assert.Single(Assert.Single(_ia.Demandas).Retrabalhos);
+        var retrabalho = Assert.Single(Assert.Single(_ia.Demandas).Retrabalhos!);
         Assert.Equal((1, reabertaEm, "Maria"), ((int)retrabalho.Numero, retrabalho.ReabertaEm, retrabalho.ReabertaPor));
-        Assert.Contains(_ia.Demandas[0].Comentarios, comentario => comentario.Texto == "Faltou o desconto");
+        Assert.Contains(_ia.Demandas[0].Comentarios!, comentario => comentario.Texto == "Faltou o desconto");
     }
 
     [Fact]
@@ -134,10 +142,10 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     {
         var tarefa = await TarefaComComentariosAsync();
         _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("Primeira", ["A"], []);
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
         _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("Segunda", ["B"], []);
-        var segunda = await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        var segunda = await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
         Assert.Equal(2, segunda.Analise!.Versao);
         var lista = (await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))!;
@@ -150,13 +158,13 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     {
         var tarefa = await TarefaComComentariosAsync();
         _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("O", ["Ajustar cálculo", "Criar teste"], ["Vale para notas antigas?"]);
-        var primeira = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var primeira = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
         await AnaliseAsync(service => service.MarcarItemAsync(tarefa, primeira.Plano()[0].Identifier, true, Ct));
         await AnaliseAsync(service => service.MarcarItemAsync(tarefa, primeira.Duvidas[0].Identifier, true, Ct));
 
         _relogio.Advance(TimeSpan.FromHours(2));
         _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("O", ["  AJUSTAR CALCULO ", "Novo item"], ["vale para notas antigas?", "Outra?"]);
-        var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
 
         Assert.Equal([(true, (DateTime?)Agora), (false, null)], segunda.Plano().Select(item => (item.Concluido, item.ConcluidoEm)));
         Assert.Equal([true, false], segunda.Duvidas.Select(item => item.Concluido));
@@ -165,7 +173,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     [Fact]
     public async Task TarefaInexistenteNaoChamaAIaAsync()
     {
-        var resultado = await AnaliseAsync(service => service.AnalisarAsync(Guid.NewGuid(), Ct));
+        var resultado = await AnaliseAsync(service => service.AnalisarAsync(Guid.NewGuid(), null, Ct));
 
         Assert.Equal(AnaliseResultadoStatus.NaoEncontrada, resultado.Status);
         Assert.Null(await AnaliseAsync(service => service.ListarAsync(Guid.NewGuid(), Ct)));
@@ -180,7 +188,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         await AlterarTarefaAsync(Nome, status: StatusTarefa.Arquivada);
         var consultas = Asana.StoriesConsultadas.Count;
 
-        var erro = await Assert.ThrowsAsync<DomainException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct)));
+        var erro = await Assert.ThrowsAsync<DomainException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct)));
 
         Assert.Equal("Tarefas arquivadas não podem ser analisadas.", erro.Message);
         Assert.Empty(_ia.Demandas);
@@ -193,10 +201,10 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         var tarefa = await TarefaComComentariosAsync();
         _ia.Bloqueio = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var primeira = AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        var primeira = AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
         await _ia.Iniciada.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         var consultas = Asana.StoriesConsultadas.Count;
-        var segunda = await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        var segunda = await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
         _ia.Bloqueio.SetResult();
 
         Assert.Equal(AnaliseResultadoStatus.EmAndamento, segunda.Status);
@@ -206,7 +214,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
 
         // Liberada ao terminar: uma nova análise volta a ser aceita.
         _ia.Bloqueio = null;
-        Assert.Equal(AnaliseResultadoStatus.Sucesso, (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Status);
+        Assert.Equal(AnaliseResultadoStatus.Sucesso, (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Status);
     }
 
     [Fact]
@@ -215,18 +223,18 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         var tarefa = await TarefaComComentariosAsync();
         _ia.Falha = new ClaudeIndisponivelException();
 
-        await Assert.ThrowsAsync<ClaudeIndisponivelException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct)));
+        await Assert.ThrowsAsync<ClaudeIndisponivelException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct)));
 
         Assert.Empty((await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))!);
         _ia.Falha = null;
-        Assert.Equal(AnaliseResultadoStatus.Sucesso, (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Status);
+        Assert.Equal(AnaliseResultadoStatus.Sucesso, (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Status);
     }
 
     [Fact]
     public async Task MarcarEDesmarcarItemDaVersaoAtualAsync()
     {
         var tarefa = await TarefaComComentariosAsync();
-        var item = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!.Plano()[0];
+        var item = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!.Plano()[0];
 
         var marcado = await AnaliseAsync(service => service.MarcarItemAsync(tarefa, item.Identifier, true, Ct));
         Assert.Equal((true, (DateTime?)Agora), (marcado.Item!.Concluido, marcado.Item.ConcluidoEm));
@@ -244,8 +252,8 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     public async Task ItemDeVersaoAnteriorNaoPodeSerMarcadoAsync()
     {
         var tarefa = await TarefaComComentariosAsync();
-        var antigo = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!.Plano()[0];
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        var antigo = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!.Plano()[0];
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
         var erro = await Assert.ThrowsAsync<DomainException>(() => AnaliseAsync(service => service.MarcarItemAsync(tarefa, antigo.Identifier, true, Ct)));
 
@@ -256,7 +264,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     public async Task ItemDeOutraTarefaNaoEEncontradoAsync()
     {
         var tarefa = await TarefaComComentariosAsync();
-        var item = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!.Plano()[0];
+        var item = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!.Plano()[0];
         Abertas(TarefaAsana(Nome), TarefaAsana("outra"));
         await SincronizarAsync();
         var outra = (await LerTarefaAsync("outra"))!.Identifier;
@@ -278,15 +286,15 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
             Comentario("c1", "Ana", "Primeiro", Base.AddHours(1)),
             Comentario("c3", "Carla", "O desconto não pode passar de 10%", Base.AddHours(3)));
 
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
-        Assert.Equal(["Primeiro", "Segundo", "O desconto não pode passar de 10%"], Assert.Single(_ia.Demandas).Comentarios.Select(c => c.Texto));
+        Assert.Equal(["Primeiro", "Segundo", "O desconto não pode passar de 10%"], Assert.Single(_ia.Demandas).Comentarios!.Select(c => c.Texto));
         Assert.Equal([("Primeiro", true), ("Segundo", true), ("O desconto não pode passar de 10%", false)], await ComentariosGravadosAsync());
 
         // Reanálise sem novidade: nada duplica e os lidos continuam lidos.
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
-        Assert.Equal(3, _ia.Demandas[1].Comentarios.Count);
+        Assert.Equal(3, _ia.Demandas[1].Comentarios!.Count);
         Assert.Equal([("Primeiro", true), ("Segundo", true), ("O desconto não pode passar de 10%", false)], await ComentariosGravadosAsync());
     }
 
@@ -297,14 +305,14 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         Historico(Nome, Comentario("c3", "Carla", "Novo", Base.AddHours(3)));
         Asana.FalharStories = Gid(Nome);
 
-        await Assert.ThrowsAsync<Actum.Modules.Asana.Errors.AsanaIndisponivelException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct)));
+        await Assert.ThrowsAsync<Actum.Modules.Asana.Errors.AsanaIndisponivelException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct)));
 
         Assert.Empty(_ia.Demandas);
         Assert.Empty((await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))!);
         Assert.Equal(["Primeiro", "Segundo"], (await ComentariosGravadosAsync()).Select(c => c.Texto));
 
         Asana.FalharStories = null;
-        Assert.Equal(AnaliseResultadoStatus.Sucesso, (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Status);
+        Assert.Equal(AnaliseResultadoStatus.Sucesso, (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Status);
     }
 
     [Fact]
@@ -317,7 +325,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
             [],
             [new("O desconto não pode passar de 10%", "comentário de Ana em 01/11/2026 11:00"), new("Não alterar o layout da nota", "descrição")]);
 
-        var primeira = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var primeira = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
 
         Assert.Equal(
             [(TipoItemAnalise.Regra, 1, "O desconto não pode passar de 10%", "comentário de Ana em 01/11/2026 11:00"), (TipoItemAnalise.Regra, 2, "Não alterar o layout da nota", "descrição")],
@@ -329,7 +337,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
 
         _relogio.Advance(TimeSpan.FromHours(1));
         _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("O", ["Ajustar cálculo"], [], [new(" o desconto NÃO pode passar de 10% ", "comentário de Ana em 01/11/2026 11:00")]);
-        var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
 
         Assert.Equal((true, (DateTime?)Agora), (Assert.Single(segunda.Regras).Concluido, segunda.Regras[0].ConcluidoEm));
     }
@@ -347,7 +355,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
             ],
         };
 
-        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
 
         Assert.Equal(
             [
@@ -362,7 +370,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     public async Task TabelasSaoConsultaveisSemAspasAsync()
     {
         var tarefa = await TarefaComComentariosAsync();
-        await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct));
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
 
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
         var tipos = await contexto.Database
@@ -374,6 +382,185 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
 
         Assert.Equal(["timestamp without time zone", "timestamp without time zone"], tipos);
         Assert.True(itens > 0);
+    }
+
+    [Fact]
+    public async Task SemCorpoEnviaDescricaoEComentariosEGravaAsFontesPadraoAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+
+        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct))).Analise!;
+
+        var demanda = Assert.Single(_ia.Demandas);
+        Assert.NotNull(demanda.Descricao);
+        Assert.Equal(2, demanda.Comentarios!.Count);
+        Assert.Null(demanda.Prompt);
+        Assert.Empty(demanda.Arquivos!);
+        Assert.Equal((ModoDaAnalise.Tarefa, true, true, (string?)null), (analise.Fontes!.Modo, analise.Fontes.Descricao, analise.Fontes.Comentarios, analise.Fontes.Prompt));
+        Assert.Empty(analise.Fontes!.Anexos);
+        Assert.Empty(Asana.Baixados);
+    }
+
+    [Fact]
+    public async Task SoAnexosEnviaOsArquivosSemDescricaoNemComentariosEGravaAsFontesAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        AnexosNoAsana(("a1", "especificacao.pdf", 3L, "asana"), ("a2", "tela.png", 2L, "asana"));
+        var fontes = new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, false, false, ["a2", "a1"], null);
+
+        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, fontes, Ct))).Analise!;
+
+        var demanda = Assert.Single(_ia.Demandas);
+        Assert.Null(demanda.Descricao);
+        Assert.Null(demanda.Comentarios);
+        Assert.Null(demanda.Retrabalhos);
+        Assert.Equal(["tela.png", "especificacao.pdf"], demanda.Arquivos!.Select(arquivo => arquivo.Nome));
+        Assert.Equal(["a2", "a1"], Asana.Baixados);
+        Assert.Equal((ModoDaAnalise.Tarefa, false, false), (analise.Fontes!.Modo, analise.Fontes.Descricao, analise.Fontes.Comentarios));
+        Assert.Equal([new AnexoDaFonteResponse("a2", "tela.png"), new AnexoDaFonteResponse("a1", "especificacao.pdf")], analise.Fontes.Anexos);
+
+        var lida = (await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))![0];
+        Assert.Equal(analise.Fontes.Anexos, lida.Fontes!.Anexos);
+    }
+
+    [Fact]
+    public async Task ModoPromptEnviaOPromptEOsArquivosCitadosSemADescricaoAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        AnexosNoAsana(("a1", "modelo.pdf", 3L, "asana"));
+        var fontes = new FontesDaAnaliseRequest(ModoDaAnalise.Prompt, true, true, ["a1"], "  Siga o padrão de @modelo.pdf  ");
+
+        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, fontes, Ct))).Analise!;
+
+        var demanda = Assert.Single(_ia.Demandas);
+        Assert.Equal("Siga o padrão de @modelo.pdf", demanda.Prompt);
+        Assert.Null(demanda.Descricao);
+        Assert.Equal(2, demanda.Comentarios!.Count);
+        Assert.Equal(["modelo.pdf"], demanda.Arquivos!.Select(arquivo => arquivo.Nome));
+        Assert.Equal((ModoDaAnalise.Prompt, false, true, "Siga o padrão de @modelo.pdf"), (analise.Fontes!.Modo, analise.Fontes.Descricao, analise.Fontes.Comentarios, analise.Fontes.Prompt));
+    }
+
+    [Fact]
+    public async Task ComentariosForaDoContextoContinuamSendoAtualizadosDoAsanaAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        Historico(Nome, Comentario("c3", "Carla", "Novo no Asana", Base.AddHours(3)));
+        AnexosNoAsana(("a1", "especificacao.pdf", 3L, "asana"));
+        var fontes = new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, false, [], null);
+
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, fontes, Ct));
+
+        Assert.Null(Assert.Single(_ia.Demandas).Comentarios);
+        Assert.Contains(("Novo no Asana", false), await ComentariosGravadosAsync());
+    }
+
+    [Fact]
+    public async Task ChecklistGravaOrigemETrechoAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        _ia.Resultado = new DemandaEstruturada(
+            "Agrupar.",
+            [new("Back", "Agrupar por filial", null, "anexo especificacao.pdf, página 3", "O relatório deve ser agrupado por filial")],
+            [],
+            [],
+            [],
+            "claude-opus-5-5",
+            10,
+            5);
+
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
+
+        var item = (await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))![0].Plano().Single();
+        Assert.Equal(("anexo especificacao.pdf, página 3", "O relatório deve ser agrupado por filial"), (item.Origem, item.Trecho));
+    }
+
+    [Fact]
+    public async Task VersaoAnteriorAsFontesVemSemFontesAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        await AnaliseAsync(service => service.AnalisarAsync(tarefa, null, Ct));
+        await using (var contexto = TarefasDbContext.Criar(Postgres.DataSource))
+        {
+            await contexto.Database.ExecuteSqlRawAsync("update tarefas.analise set fonte_modo = null, fonte_descricao = null, fonte_comentarios = null", Ct);
+        }
+
+        var lida = (await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))![0];
+
+        Assert.Null(lida.Fontes);
+    }
+
+    public static TheoryData<FontesDaAnaliseRequest, string, string> FontesInvalidas => new()
+    {
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, false, false, [], null), "Fontes", "Escolha ao menos uma fonte para a análise." },
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Prompt, null, null, [], "   "), "Prompt", "Escreva o prompt da análise." },
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["a1", "a1"], null), "Anexos", "O mesmo anexo foi escolhido mais de uma vez." },
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["outro"], null), "Anexos", "O anexo não está mais na tarefa no Asana." },
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["a2"], null), "Anexos", "video.mp4: Tipo de arquivo não suportado pela análise." },
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["a3"], null), "Anexos", "planilha: Arquivos externos não podem ser lidos pela análise." },
+        { new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["a4", "a5"], null), "Anexos", "Os anexos escolhidos somam mais de 20 MB. Escolha menos arquivos." },
+    };
+
+    [Theory]
+    [MemberData(nameof(FontesInvalidas))]
+    public async Task FontesInvalidasNaoChamamAIaNemGravamVersaoAsync(FontesDaAnaliseRequest fontes, string campo, string mensagem)
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        AnexosNoAsana(
+            ("a1", "especificacao.pdf", 3L, "asana"),
+            ("a2", "video.mp4", 3L, "asana"),
+            ("a3", "planilha", null, "gdrive"),
+            ("a4", "manual-1.pdf", 15L * 1024 * 1024, "asana"),
+            ("a5", "manual-2.pdf", 15L * 1024 * 1024, "asana"));
+
+        var resultado = await AnaliseAsync(service => service.AnalisarAsync(tarefa, fontes, Ct));
+
+        Assert.Equal(AnaliseResultadoStatus.FontesInvalidas, resultado.Status);
+        Assert.Equal([mensagem], resultado.Erros![campo]);
+        Assert.Empty(_ia.Demandas);
+        Assert.Empty(Asana.Baixados);
+        Assert.Empty((await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))!);
+    }
+
+    [Fact]
+    public async Task FalhaDoAsanaAoBaixarNaoChamaAIaNemGravaVersaoAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        AnexosNoAsana(("a1", "especificacao.pdf", 3L, "asana"));
+        Asana.FalhaAoBaixar = new Actum.Modules.Asana.Errors.AsanaIndisponivelException();
+        var fontes = new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["a1"], null);
+
+        await Assert.ThrowsAsync<Actum.Modules.Asana.Errors.AsanaIndisponivelException>(() => AnaliseAsync(service => service.AnalisarAsync(tarefa, fontes, Ct)));
+
+        Assert.Empty(_ia.Demandas);
+        Assert.Empty((await AnaliseAsync(service => service.ListarAsync(tarefa, Ct)))!);
+    }
+
+    [Fact]
+    public async Task AnexoDeOutraTarefaNoDownloadEFonteInvalidaAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        AnexosNoAsana(("a1", "especificacao.pdf", 3L, "asana"));
+        Asana.Conteudos["a1"] = new AsanaConteudoDoAnexo("especificacao.pdf", "outra-tarefa", [1, 2, 3]);
+        var fontes = new FontesDaAnaliseRequest(ModoDaAnalise.Tarefa, true, true, ["a1"], null);
+
+        var resultado = await AnaliseAsync(service => service.AnalisarAsync(tarefa, fontes, Ct));
+
+        Assert.Equal(AnaliseResultadoStatus.FontesInvalidas, resultado.Status);
+        Assert.Equal(["O anexo não está mais na tarefa no Asana."], resultado.Erros!["Anexos"]);
+        Assert.Empty(_ia.Demandas);
+    }
+
+    /// <summary>
+    /// Anexos da tarefa do cenário no Asana, com conteúdo de 3 bytes para download
+    /// </summary>
+    private void AnexosNoAsana(params (string Gid, string Nome, long? Tamanho, string Hospedagem)[] anexos)
+    {
+        var gid = Gid(Nome);
+        Asana.AnexosDaTarefa[gid] = anexos.Select(anexo => new AsanaAnexoDaTarefa(anexo.Gid, anexo.Nome, Base, anexo.Tamanho, anexo.Hospedagem)).ToList();
+        foreach (var anexo in anexos)
+        {
+            Asana.Conteudos[anexo.Gid] = new AsanaConteudoDoAnexo(anexo.Nome, gid, [1, 2, 3]);
+        }
     }
 
     private async Task<Guid> TarefaComComentariosAsync()
@@ -404,7 +591,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
 
-        return await acao(new AnaliseService(contexto, _ia, Asana, _emAndamento, _relogio));
+        return await acao(new AnaliseService(contexto, _ia, Asana, Arquivos, _emAndamento, _relogio));
     }
 
     /// <summary>

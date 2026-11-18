@@ -43,3 +43,11 @@ public sealed class AsanaIndisponivelException(Exception? innerException = null)
 /// <param name="message">Failure description, in pt-BR</param>
 public sealed class AsanaRequisicaoRecusadaException(string message)
     : AsanaException(message);
+
+/// <summary>
+/// The downloaded attachment is larger than the maximum size accepted by the caller; the download was interrupted
+/// </summary>
+/// <param name="nome">File name</param>
+/// <param name="tamanhoMaximo">Maximum size, in bytes</param>
+public sealed class AsanaAnexoGrandeDemaisException(string nome, long tamanhoMaximo)
+    : AsanaException($"O arquivo {nome} é maior que {tamanhoMaximo / (1024 * 1024)} MB.");

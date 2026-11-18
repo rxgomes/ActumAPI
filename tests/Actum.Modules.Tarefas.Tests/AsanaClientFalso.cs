@@ -201,6 +201,32 @@ public sealed class AsanaClientFalso : IAsanaClient
         return Task.FromResult(Downloads.GetValueOrDefault(anexoGid));
     }
 
+    /// <summary>
+    /// Conteúdo dos anexos por gid; anexo ausente responde como excluído (<see langword="null"/>)
+    /// </summary>
+    public Dictionary<string, AsanaConteudoDoAnexo> Conteudos { get; } = [];
+
+    /// <summary>
+    /// Falha a lançar ao baixar qualquer anexo (ex.: Asana indisponível)
+    /// </summary>
+    public Exception? FalhaAoBaixar { get; set; }
+
+    /// <summary>
+    /// Gids dos anexos baixados, na ordem
+    /// </summary>
+    public List<string> Baixados { get; } = [];
+
+    public Task<AsanaConteudoDoAnexo?> BaixarAnexoAsync(string anexoGid, long tamanhoMaximo, CancellationToken cancellationToken)
+    {
+        if (FalhaAoBaixar is not null)
+        {
+            throw FalhaAoBaixar;
+        }
+
+        Baixados.Add(anexoGid);
+        return Task.FromResult(Conteudos.GetValueOrDefault(anexoGid));
+    }
+
     public async Task<AsanaAnexo> AnexarArquivoAsync(string tarefaGid, string nome, string tipo, Stream conteudo, CancellationToken cancellationToken)
     {
         using var memoria = new MemoryStream();

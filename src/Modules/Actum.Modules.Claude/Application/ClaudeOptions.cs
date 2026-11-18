@@ -19,7 +19,7 @@ internal sealed record ClaudeOptions(string? ApiKey, string Modelo, string Esfor
 
     public const string EsforcoPadrao = "medium";
 
-    public const int MaxTokensPadrao = 16000;
+    public const int MaxTokensPadrao = 32000;
 
     public const int NovasTentativasPadrao = 2;
 

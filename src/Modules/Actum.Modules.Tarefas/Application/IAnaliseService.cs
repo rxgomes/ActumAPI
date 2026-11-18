@@ -21,6 +21,11 @@ public enum AnaliseResultadoStatus
     /// An analysis of the same task is still running
     /// </summary>
     EmAndamento,
+
+    /// <summary>
+    /// The sources of the analysis are invalid; the messages per field are in <see cref="AnaliseResultado.Erros"/>
+    /// </summary>
+    FontesInvalidas,
 }
 
 /// <summary>
@@ -30,7 +35,14 @@ public enum AnaliseResultadoStatus
 /// <param name="Status">Outcome</param>
 /// <param name="Analise">Analysis created, for a successful analysis</param>
 /// <param name="Item">Item after the marking, for a successful marking</param>
-public sealed record AnaliseResultado(AnaliseResultadoStatus Status, AnaliseResponse? Analise = null, AnaliseItemResponse? Item = null)
+/// <param name="Erros">
+/// Messages in pt-BR per field (<c>Fontes</c>, <c>Anexos</c>, <c>Prompt</c>), for <see cref="AnaliseResultadoStatus.FontesInvalidas"/>
+/// </param>
+public sealed record AnaliseResultado(
+    AnaliseResultadoStatus Status,
+    AnaliseResponse? Analise = null,
+    AnaliseItemResponse? Item = null,
+    IReadOnlyDictionary<string, string[]>? Erros = null)
 {
     /// <summary>
     /// No task (or item of the task) has the given identifier
@@ -41,6 +53,13 @@ public sealed record AnaliseResultado(AnaliseResultadoStatus Status, AnaliseResp
     /// An analysis of the same task is still running
     /// </summary>
     public static readonly AnaliseResultado EmAndamento = new(AnaliseResultadoStatus.EmAndamento);
+
+    /// <summary>
+    /// The sources of the analysis are invalid
+    /// </summary>
+    /// <param name="erros">Messages in pt-BR per field</param>
+    public static AnaliseResultado FontesInvalidas(IReadOnlyDictionary<string, string[]> erros) =>
+        new(AnaliseResultadoStatus.FontesInvalidas, Erros: erros);
 }
 
 /// <summary>
@@ -53,21 +72,25 @@ public sealed record AnaliseResultado(AnaliseResultadoStatus Status, AnaliseResp
 public interface IAnaliseService
 {
     /// <summary>
-    /// Send the full task context (company, title, description, projects, comments and rework history) to the
-    /// AI and store the answer as the new current version. Items equal to items marked in the previous version
-    /// come already marked. Fails with <see cref="Actum.Shared.Abstractions.Domain.DomainException"/> for an
-    /// archived task and propagates the Claude API failures without storing anything.
+    /// Bring the comments up to date from the Asana, then send to the AI the company, title and projects plus the
+    /// chosen sources (description, comments with the rework history, attachments downloaded now from the Asana
+    /// and the prompt written by the user) and store the answer, with the sources, as the new current version.
+    /// Without sources, the description and the comments are sent. Items equal to items marked in the previous
+    /// version come already marked. Fails with <see cref="Actum.Shared.Abstractions.Domain.DomainException"/> for
+    /// an archived task and propagates the Asana and Claude API failures without storing anything.
     /// </summary>
     /// <param name="tarefaIdentifier">Task identifier</param>
+    /// <param name="fontes">Sources of the analysis; <see langword="null"/> for description and comments</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>
-    /// The new version, <see cref="AnaliseResultadoStatus.NaoEncontrada"/> or
-    /// <see cref="AnaliseResultadoStatus.EmAndamento"/> when another analysis of the task is running
+    /// The new version, <see cref="AnaliseResultadoStatus.NaoEncontrada"/>,
+    /// <see cref="AnaliseResultadoStatus.EmAndamento"/> when another analysis of the task is running or
+    /// <see cref="AnaliseResultadoStatus.FontesInvalidas"/> with the messages per field (nothing sent to the AI)
     /// </returns>
     /// <author>Ricardo Gomes</author>
     /// <created>2026-11-03</created>
-    /// <modified>2026-11-03</modified>
-    Task<AnaliseResultado> AnalisarAsync(Guid tarefaIdentifier, CancellationToken cancellationToken);
+    /// <modified>2026-11-18</modified>
+    Task<AnaliseResultado> AnalisarAsync(Guid tarefaIdentifier, FontesDaAnaliseRequest? fontes, CancellationToken cancellationToken);
 
     /// <summary>
     /// List every analysis version of the task, most recent first, with its items in order

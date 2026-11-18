@@ -226,6 +226,24 @@ internal sealed class AnaliseConfiguration : IEntityTypeConfiguration<Analise>
             .WithOne()
             .HasForeignKey(item => item.AnaliseId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(analise => analise.FonteModo)
+            .HasConversion(new EnumSnakeCaseConverter<ModoDaAnalise>())
+            .HasMaxLength(10);
+        builder.Property(analise => analise.FontePrompt).HasMaxLength(Analise.PromptMaxLength);
+
+        // Tabela analise_fonte_anexo (nome pela convenção snake_case), apagada junto com a versão.
+        builder.OwnsMany(analise => analise.FonteAnexos, anexo =>
+        {
+            anexo.WithOwner().HasForeignKey("AnaliseId");
+            anexo.Property<long>("Id");
+            anexo.HasKey("Id");
+            anexo.Property(fonte => fonte.AnexoGid).HasMaxLength(AnaliseFonteAnexo.GidMaxLength);
+            anexo.Property(fonte => fonte.Nome).HasMaxLength(AnaliseFonteAnexo.NomeMaxLength);
+            anexo.HasIndex("AnaliseId", nameof(AnaliseFonteAnexo.Ordem)).IsUnique();
+        });
+        builder.Navigation(analise => analise.FonteAnexos).HasField("_fonteAnexos");
+        builder.Ignore(analise => analise.Fontes);
     }
 }
 

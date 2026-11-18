@@ -12,8 +12,10 @@ namespace Actum.Modules.Claude.Application;
 public interface IAnalisadorDeDemanda
 {
     /// <summary>
-    /// Send the task context to the Claude API and return the structured demand, in pt-BR. Fails with
-    /// <see cref="ClaudeNaoConfiguradoException"/> (no call made), <see cref="ClaudeChaveInvalidaException"/>,
+    /// Send the task context (with the chosen sources: description, comments, prompt and files) to the Claude API
+    /// and return the structured demand, in pt-BR. Fails with <see cref="ClaudeNaoConfiguradoException"/> or
+    /// <see cref="ClaudeArquivoIlegivelException"/> (no call made), <see cref="ClaudeArquivoRejeitadoException"/>,
+    /// <see cref="ClaudeChaveInvalidaException"/>,
     /// <see cref="ClaudeSemCreditoException"/>, <see cref="ClaudeRecusaException"/>,
     /// <see cref="ClaudeRespostaIncompletaException"/> or
     /// <see cref="ClaudeIndisponivelException"/>; never returns a partial result.
@@ -23,6 +25,6 @@ public interface IAnalisadorDeDemanda
     /// <returns>Objective, checklist and questions, with the model that answered and the tokens consumed</returns>
     /// <author>Ricardo Gomes</author>
     /// <created>2026-11-03</created>
-    /// <modified>2026-11-03</modified>
+    /// <modified>2026-11-18</modified>
     Task<DemandaEstruturada> AnalisarAsync(DemandaParaAnalise demanda, CancellationToken cancellationToken);
 }

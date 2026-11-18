@@ -36,6 +36,28 @@ public sealed class AnexoTests(PostgresFixture postgres) : SincronizacaoTestBase
     }
 
     [Fact]
+    public async Task CadaAnexoInformaSePodeSerLidoPelaAnaliseAsync()
+    {
+        var tarefa = await TarefaAsync();
+        Asana.AnexosDaTarefa[Gid(Nome)] =
+        [
+            new("a1", "layout.pdf", Base.AddHours(1), 2048, "asana"),
+            new("a2", "video.mp4", Base.AddHours(2), 2048, "asana"),
+            new("a3", "planilha", Base.AddHours(3), null, "gdrive"),
+        ];
+
+        var anexos = await ServicoAsync(service => service.ListarAsync(tarefa, Ct));
+
+        Assert.Equal(
+            [
+                (true, (string?)null),
+                (false, "Tipo de arquivo não suportado pela análise."),
+                (false, "Arquivos externos não podem ser lidos pela análise."),
+            ],
+            anexos!.Select(anexo => (anexo.LegivelNaAnalise, anexo.Motivo)));
+    }
+
+    [Fact]
     public async Task TarefaSemAnexosTemListaVaziaAsync()
     {
         var tarefa = await TarefaAsync();
@@ -101,6 +123,6 @@ public sealed class AnexoTests(PostgresFixture postgres) : SincronizacaoTestBase
     {
         await using var contexto = TarefasDbContext.Criar(Postgres.DataSource);
 
-        return await acao(new AnexoService(contexto, Asana));
+        return await acao(new AnexoService(contexto, Asana, AnaliseTests.Arquivos));
     }
 }

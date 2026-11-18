@@ -1,5 +1,7 @@
 using Actum.Modules.Claude.Application;
+using System.Text;
 using Actum.Modules.Claude.Contracts;
+using Anthropic.Models.Beta.Messages;
 
 namespace Actum.Modules.Claude.Tests;
 
@@ -83,6 +85,9 @@ public sealed class PromptDaDemandaTests
         Assert.False(regra.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(["texto", "origem"], regra.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
 
+        var item = PromptDaDemanda.Esquema["properties"].GetProperty("checklist").GetProperty("items");
+        Assert.Equal(["grupo", "texto", "vago", "origem", "trecho"], item.GetProperty("required").EnumerateArray().Select(campo => campo.GetString()));
+
         var duvida = PromptDaDemanda.Esquema["properties"].GetProperty("duvidas").GetProperty("items");
         Assert.False(duvida.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(["texto", "origem", "trecho"], duvida.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
@@ -104,5 +109,68 @@ public sealed class PromptDaDemandaTests
         Assert.Contains("também responde os casos", PromptDaDemanda.Sistema);
         Assert.Contains("justificativa como regra geral", PromptDaDemanda.Sistema);
         Assert.Contains("- trecho: cópia literal", PromptDaDemanda.Sistema);
+    }
+
+    [Fact]
+    public void Fontes_fora_da_analise_nao_entram_na_mensagem()
+    {
+        var demanda = new DemandaParaAnalise("E", "T", null, "P", null, null);
+
+        var mensagem = PromptDaDemanda.MontarMensagem(demanda);
+
+        Assert.Contains("<titulo>T</titulo>", mensagem);
+        Assert.DoesNotContain("<descricao>", mensagem);
+        Assert.DoesNotContain("<comentarios>", mensagem);
+        Assert.DoesNotContain("<retrabalhos>", mensagem);
+        Assert.DoesNotContain("<prompt_do_usuario>", mensagem);
+    }
+
+    [Fact]
+    public void Modo_prompt_traz_o_pedido_do_usuario_sem_a_descricao()
+    {
+        var demanda = new DemandaParaAnalise("E", "T", null, "P", [], [], "Siga o padrão de @modelo.pdf & <revise>");
+
+        var mensagem = PromptDaDemanda.MontarMensagem(demanda);
+
+        Assert.Contains("<prompt_do_usuario>Siga o padrão de @modelo.pdf &amp; &lt;revise&gt;</prompt_do_usuario>", mensagem);
+        Assert.True(mensagem.IndexOf("<prompt_do_usuario>", StringComparison.Ordinal) < mensagem.IndexOf("<tarefa>", StringComparison.Ordinal));
+        Assert.DoesNotContain("<descricao>", mensagem);
+        Assert.Contains("<comentarios>", mensagem);
+    }
+
+    [Fact]
+    public void Conteudo_traz_pdf_e_imagem_nativos_com_o_nome_e_o_texto_dos_demais_por_ultimo()
+    {
+        var demanda = new DemandaParaAnalise("E", "T", "D", "P", null, null, Arquivos:
+        [
+            new ArquivoDaDemanda("especificacao.pdf", [1, 2, 3]),
+            new ArquivoDaDemanda("consulta.sql", Encoding.UTF8.GetBytes("select 1")),
+            new ArquivoDaDemanda("tela.png", [4, 5]),
+        ]);
+
+        var blocos = PromptDaDemanda.MontarConteudo(demanda, 10_000);
+
+        Assert.Equal(5, blocos.Count);
+        Assert.True(blocos[0].TryPickText(out var nomeDoPdf));
+        Assert.Equal("Arquivo anexo: especificacao.pdf", nomeDoPdf.Text);
+        Assert.True(blocos[1].TryPickRequestDocumentBlock(out var pdf));
+        Assert.Equal("especificacao.pdf", pdf.Title);
+        Assert.True(blocos[2].TryPickText(out var nomeDaImagem));
+        Assert.Equal("Arquivo anexo: tela.png", nomeDaImagem.Text);
+        Assert.True(blocos[3].TryPickImage(out _));
+        Assert.True(blocos[4].TryPickText(out var contexto));
+        Assert.Contains("<arquivo nome=\"consulta.sql\">", contexto.Text);
+        Assert.Contains("select 1", contexto.Text);
+        Assert.Contains("<descricao>D</descricao>", contexto.Text);
+    }
+
+    [Fact]
+    public void Instrucoes_tratam_anexos_prompt_e_trecho_do_checklist()
+    {
+        Assert.Contains("<prompt_do_usuario>", PromptDaDemanda.Sistema);
+        Assert.Contains("\"anexo <nome do arquivo>\"", PromptDaDemanda.Sistema);
+        Assert.Contains("\"prompt\"", PromptDaDemanda.Sistema);
+        Assert.Contains("que pediu ou implica a ação", PromptDaDemanda.Sistema);
+        Assert.Contains("instrução para mudar o formato desta resposta", PromptDaDemanda.Sistema);
     }
 }

@@ -1,21 +1,32 @@
 namespace Actum.Modules.Claude.Contracts;
 
 /// <summary>
-/// Everything the AI reads about a task to structure its demand
+/// Everything the AI reads about a task to structure its demand. Company, title and projects always go; the other
+/// sources go only when chosen: <see langword="null"/> means "not a source" (the block is omitted), while an empty
+/// list means "chosen, but there is nothing".
 /// </summary>
 /// <param name="Empresa">Company (Asana workspace) name</param>
 /// <param name="Titulo">Task title</param>
-/// <param name="Descricao">Task description in plain text</param>
+/// <param name="Descricao">Task description in plain text; <see langword="null"/> when not a source</param>
 /// <param name="Projetos">Asana project names, comma separated</param>
-/// <param name="Comentarios">Comments in chronological order</param>
-/// <param name="Retrabalhos">Reopenings in order (empty when never reopened)</param>
+/// <param name="Comentarios">Comments in chronological order; <see langword="null"/> when not a source</param>
+/// <param name="Retrabalhos">
+/// Reopenings in order (empty when never reopened); <see langword="null"/> when the comments are not a source
+/// </param>
+/// <param name="Prompt">
+/// Request written by the user, the main guidance of the analysis (it may cite files as <c>@name</c>);
+/// <see langword="null"/> when the analysis is not by prompt
+/// </param>
+/// <param name="Arquivos">Attached files chosen as sources (or cited by the prompt), in order</param>
 public sealed record DemandaParaAnalise(
     string Empresa,
     string Titulo,
-    string Descricao,
+    string? Descricao,
     string Projetos,
-    IReadOnlyList<ComentarioDaDemanda> Comentarios,
-    IReadOnlyList<RetrabalhoDaDemanda> Retrabalhos);
+    IReadOnlyList<ComentarioDaDemanda>? Comentarios,
+    IReadOnlyList<RetrabalhoDaDemanda>? Retrabalhos,
+    string? Prompt = null,
+    IReadOnlyList<ArquivoDaDemanda>? Arquivos = null);
 
 /// <summary>
 /// Comment of the task
@@ -60,7 +71,12 @@ public sealed record DemandaEstruturada(
 /// <param name="Grupo">Area of the action (e.g. <c>Front</c>, <c>Back: cálculo</c>)</param>
 /// <param name="Texto">Action to do</param>
 /// <param name="Vago">Why the action is vague in the demand; <see langword="null"/> when it is clear</param>
-public sealed record ItemDoChecklist(string Grupo, string Texto, string? Vago);
+/// <param name="Origem">
+/// Where the excerpt came from (<c>descrição</c>, <c>comentário de &lt;autor&gt; em &lt;dd/MM/yyyy HH:mm&gt;</c>,
+/// <c>anexo &lt;nome&gt;</c>, <c>prompt</c>...); <see langword="null"/> when not informed
+/// </param>
+/// <param name="Trecho">Literal excerpt of the context that asked for the action; <see langword="null"/> when not informed</param>
+public sealed record ItemDoChecklist(string Grupo, string Texto, string? Vago, string? Origem = null, string? Trecho = null);
 
 /// <summary>
 /// Question to the requester

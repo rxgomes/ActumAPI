@@ -135,7 +135,7 @@ public sealed class AnalisadorDeDemandaTests
         using var json = JsonDocument.Parse(corpo);
         var raiz = json.RootElement;
         Assert.Equal("claude-opus-5-5", raiz.GetProperty("model").GetString());
-        Assert.Equal(16000, raiz.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(32000, raiz.GetProperty("max_tokens").GetInt32());
         Assert.Equal("default", raiz.GetProperty("fallbacks").GetString());
         Assert.False(raiz.TryGetProperty("thinking", out _));
 
@@ -220,6 +220,74 @@ public sealed class AnalisadorDeDemandaTests
         _anthropic.ResponderErro(status, tipo);
 
         await Assert.ThrowsAsync<ClaudeChaveInvalidaException>(() => Criar().AnalisarAsync(Demanda, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Requisicao_com_anexos_leva_pdf_e_imagem_em_base64_antes_do_contexto()
+    {
+        _anthropic.ResponderEstruturado("Objetivo", [], []);
+        var demanda = Demanda with
+        {
+            Arquivos = [new ArquivoDaDemanda("especificacao.pdf", [1, 2, 3]), new ArquivoDaDemanda("tela.png", [4, 5, 6])],
+        };
+
+        await Criar().AnalisarAsync(demanda, TestContext.Current.CancellationToken);
+
+        using var json = JsonDocument.Parse(Assert.Single(_anthropic.Requisicoes).Corpo);
+        var conteudo = json.RootElement.GetProperty("messages")[0].GetProperty("content").EnumerateArray().ToList();
+        Assert.Equal(["text", "document", "text", "image", "text"], conteudo.Select(bloco => bloco.GetProperty("type").GetString()));
+        Assert.Equal("application/pdf", conteudo[1].GetProperty("source").GetProperty("media_type").GetString());
+        Assert.Equal(Convert.ToBase64String([1, 2, 3]), conteudo[1].GetProperty("source").GetProperty("data").GetString());
+        Assert.Equal("image/png", conteudo[3].GetProperty("source").GetProperty("media_type").GetString());
+        Assert.Equal(Convert.ToBase64String([4, 5, 6]), conteudo[3].GetProperty("source").GetProperty("data").GetString());
+        Assert.Contains("<tarefa>", conteudo[4].GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task Checklist_traz_origem_e_trecho()
+    {
+        _anthropic.ResponderMensagem(JsonSerializer.Serialize(new
+        {
+            objetivo = "Agrupar.",
+            checklist = new[]
+            {
+                new { grupo = "Back", texto = "Agrupar por filial", vago = "", origem = " anexo especificacao.pdf, página 3 ", trecho = " O relatório deve ser agrupado por filial " },
+                new { grupo = "Front", texto = "Exibir", vago = "", origem = "", trecho = "" },
+            },
+            testes = Array.Empty<string>(),
+            duvidas = Array.Empty<object>(),
+            regras = Array.Empty<object>(),
+        }));
+
+        var resultado = await Criar().AnalisarAsync(Demanda, TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [
+                new ItemDoChecklist("Back", "Agrupar por filial", null, "anexo especificacao.pdf, página 3", "O relatório deve ser agrupado por filial"),
+                new ItemDoChecklist("Front", "Exibir", null, null, null),
+            ],
+            resultado.Checklist);
+    }
+
+    [Fact]
+    public async Task Recusa_da_anthropic_com_anexos_vira_arquivo_rejeitado()
+    {
+        _anthropic.ResponderErro(HttpStatusCode.BadRequest, "invalid_request_error");
+        var demanda = Demanda with { Arquivos = [new ArquivoDaDemanda("contrato.pdf", [1])] };
+
+        var erro = await Assert.ThrowsAsync<ClaudeArquivoRejeitadoException>(() => Criar().AnalisarAsync(demanda, TestContext.Current.CancellationToken));
+
+        Assert.Contains("anexos não pôde ser lido pela IA", erro.Message);
+    }
+
+    [Fact]
+    public async Task Arquivo_ilegivel_falha_sem_chamar_a_anthropic()
+    {
+        var demanda = Demanda with { Arquivos = [new ArquivoDaDemanda("regras.docx", [1, 2, 3])] };
+
+        await Assert.ThrowsAsync<ClaudeArquivoIlegivelException>(() => Criar().AnalisarAsync(demanda, TestContext.Current.CancellationToken));
+
+        Assert.Empty(_anthropic.Requisicoes);
     }
 
     [Fact]

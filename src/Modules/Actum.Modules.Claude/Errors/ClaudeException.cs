@@ -55,3 +55,40 @@ public sealed class ClaudeRespostaIncompletaException(Exception? innerException 
 /// <param name="innerException">Original failure, if any</param>
 public sealed class ClaudeIndisponivelException(Exception? innerException = null)
     : ClaudeException("Não foi possível comunicar com a Claude API. Tente novamente em instantes.", innerException);
+
+/// <summary>
+/// A file of the demand could not be read to be sent to the AI (corrupted, or text above the limit); no call made
+/// </summary>
+public sealed class ClaudeArquivoIlegivelException : ClaudeException
+{
+    /// <summary>
+    /// The file could not be opened
+    /// </summary>
+    /// <param name="nome">File name</param>
+    /// <param name="innerException">Original failure, if any</param>
+    public ClaudeArquivoIlegivelException(string nome, Exception? innerException = null)
+        : base($"Não foi possível ler o arquivo {nome}.", innerException)
+    {
+    }
+
+    private ClaudeArquivoIlegivelException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>
+    /// The text extracted from the file passes the character limit of the analysis (the text is never cut)
+    /// </summary>
+    /// <param name="nome">File name</param>
+    /// <param name="maxCaracteres">Character limit</param>
+    public static ClaudeArquivoIlegivelException TextoLongoDemais(string nome, int maxCaracteres) =>
+        new($"O texto do arquivo {nome} passa do limite de {maxCaracteres.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"))} caracteres da análise. Escolha um arquivo menor.");
+}
+
+/// <summary>
+/// The Anthropic rejected a request that carried files (<c>400</c>): PDF protected, with too many pages or
+/// corrupted, or invalid image
+/// </summary>
+/// <param name="innerException">Original failure</param>
+public sealed class ClaudeArquivoRejeitadoException(Exception? innerException = null)
+    : ClaudeException("Um dos anexos não pôde ser lido pela IA (PDF protegido, com páginas demais ou corrompido, ou imagem inválida). Revise os anexos escolhidos.", innerException);

@@ -8,4 +8,6 @@ namespace Actum.Modules.Tarefas.Contracts;
 /// <param name="CriadoEm">Local date and time of the upload</param>
 /// <param name="Tamanho">Size in bytes; <see langword="null"/> when the Asana does not know it (external files)</param>
 /// <param name="Hospedagem">Where the file is stored (<c>asana</c>, <c>gdrive</c>, <c>dropbox</c>...)</param>
-public sealed record AnexoResponse(string Gid, string Nome, DateTime CriadoEm, long? Tamanho, string Hospedagem);
+/// <param name="LegivelNaAnalise">Whether the file can be a source of the AI analysis</param>
+/// <param name="Motivo">Why the file cannot be a source of the analysis, in pt-BR; <see langword="null"/> when it can</param>
+public sealed record AnexoResponse(string Gid, string Nome, DateTime CriadoEm, long? Tamanho, string Hospedagem, bool LegivelNaAnalise, string? Motivo);

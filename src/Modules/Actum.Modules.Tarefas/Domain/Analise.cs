@@ -12,7 +12,11 @@ public sealed class Analise : Entity
 {
     public const int ModeloMaxLength = 100;
 
+    public const int PromptMaxLength = 20000;
+
     private readonly List<AnaliseItem> _itens = [];
+
+    private readonly List<AnaliseFonteAnexo> _fonteAnexos = [];
 
     private Analise()
     {
@@ -59,6 +63,43 @@ public sealed class Analise : Entity
     public IReadOnlyList<AnaliseItem> Itens => _itens;
 
     /// <summary>
+    /// How the sources were chosen; <see langword="null"/> for versions analyzed before the sources were stored
+    /// </summary>
+    public ModoDaAnalise? FonteModo { get; private set; }
+
+    /// <summary>
+    /// Whether the description was sent; <see langword="null"/> for versions before the sources were stored
+    /// </summary>
+    public bool? FonteDescricao { get; private set; }
+
+    /// <summary>
+    /// Whether the comments were sent; <see langword="null"/> for versions before the sources were stored
+    /// </summary>
+    public bool? FonteComentarios { get; private set; }
+
+    /// <summary>
+    /// Request written by the user (prompt mode); <see langword="null"/> otherwise
+    /// </summary>
+    public string? FontePrompt { get; private set; }
+
+    /// <summary>
+    /// Attachments sent as sources, in order
+    /// </summary>
+    public IReadOnlyList<AnaliseFonteAnexo> FonteAnexos => _fonteAnexos;
+
+    /// <summary>
+    /// Sources used by this version; <see langword="null"/> for versions analyzed before the sources were stored
+    /// </summary>
+    public FontesDaAnalise? Fontes => FonteModo is { } modo
+        ? new FontesDaAnalise(
+            modo,
+            FonteDescricao ?? false,
+            FonteComentarios ?? false,
+            FontePrompt,
+            _fonteAnexos.OrderBy(anexo => anexo.Ordem).Select(anexo => (anexo.AnexoGid, anexo.Nome)).ToList())
+        : null;
+
+    /// <summary>
     /// Create a new version of the analysis. Items with the same type and text (ignoring case, accents and
     /// surrounding spaces) of an item marked in <paramref name="anterior"/> come already marked, with the
     /// original date.
@@ -66,7 +107,9 @@ public sealed class Analise : Entity
     /// <param name="tarefaId">Analyzed task</param>
     /// <param name="anterior">Current version before this one; <see langword="null"/> for the first analysis</param>
     /// <param name="objetivo">Expected result</param>
-    /// <param name="checklist">Checklist items (area, text and why it is vague, if it is), grouped, in order</param>
+    /// <param name="checklist">
+    /// Checklist items (area, text, why it is vague, origin and the excerpt that asked for it), grouped, in order
+    /// </param>
     /// <param name="testes">Tests, in order</param>
     /// <param name="duvidas">Questions (text, origin and the excerpt that raised it), in order</param>
     /// <param name="regras">Rules (text and origin), in order</param>
@@ -74,19 +117,21 @@ public sealed class Analise : Entity
     /// <param name="tokensEntrada">Input tokens</param>
     /// <param name="tokensSaida">Output tokens</param>
     /// <param name="analisadaEm">Local date and time of the analysis</param>
+    /// <param name="fontes">Sources sent to the AI</param>
     /// <returns>New version, numbered after <paramref name="anterior"/></returns>
     public static Analise Criar(
         long tarefaId,
         Analise? anterior,
         string objetivo,
-        IReadOnlyList<(string? Grupo, string Texto, string? Vago)> checklist,
+        IReadOnlyList<(string? Grupo, string Texto, string? Vago, string? Origem, string? Trecho)> checklist,
         IReadOnlyList<string> testes,
         IReadOnlyList<(string Texto, string? Origem, string? Trecho)> duvidas,
         IReadOnlyList<(string Texto, string Origem)> regras,
         string modelo,
         int tokensEntrada,
         int tokensSaida,
-        DateTime analisadaEm)
+        DateTime analisadaEm,
+        FontesDaAnalise fontes)
     {
         var analise = new Analise
         {
@@ -97,14 +142,24 @@ public sealed class Analise : Entity
             TokensEntrada = tokensEntrada,
             TokensSaida = tokensSaida,
             AnalisadaEm = analisadaEm,
+            FonteModo = fontes.Modo,
+            FonteDescricao = fontes.Descricao,
+            FonteComentarios = fontes.Comentarios,
+            FontePrompt = fontes.Prompt is { Length: > PromptMaxLength } prompt ? prompt[..PromptMaxLength] : fontes.Prompt,
         };
+
+        for (var indice = 0; indice < fontes.Anexos.Count; indice++)
+        {
+            var (gid, nome) = fontes.Anexos[indice];
+            analise._fonteAnexos.Add(new AnaliseFonteAnexo((short)(indice + 1), gid, nome));
+        }
 
         var marcados = (anterior?.Itens ?? [])
             .Where(item => item.ConcluidoEm is not null)
             .GroupBy(item => (item.Tipo, Normalizar(item.Texto)))
             .ToDictionary(grupo => grupo.Key, grupo => grupo.First().ConcluidoEm);
 
-        analise.AdicionarItens(TipoItemAnalise.Checklist, checklist.Select(item => (item.Grupo, item.Texto, item.Vago, (string?)null, (string?)null)).ToList(), marcados);
+        analise.AdicionarItens(TipoItemAnalise.Checklist, checklist.Select(item => (item.Grupo, item.Texto, item.Vago, item.Origem, item.Trecho)).ToList(), marcados);
         analise.AdicionarItens(TipoItemAnalise.Teste, testes.Select(texto => ((string?)null, texto, (string?)null, (string?)null, (string?)null)).ToList(), marcados);
         analise.AdicionarItens(TipoItemAnalise.Duvida, duvidas.Select(duvida => ((string?)null, duvida.Texto, (string?)null, duvida.Origem, duvida.Trecho)).ToList(), marcados);
         analise.AdicionarItens(TipoItemAnalise.Regra, regras.Select(regra => ((string?)null, regra.Texto, (string?)null, (string?)regra.Origem, (string?)null)).ToList(), marcados);

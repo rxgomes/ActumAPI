@@ -38,16 +38,27 @@ internal sealed class AnaliseService(
     TarefasDbContext context,
     IAnalisadorDeDemanda analisador,
     IAsanaClient asana,
+    IArquivosDaAnalise arquivos,
     AnalisesEmAndamento emAndamento,
     TimeProvider timeProvider) : IAnaliseService
 {
+    private const string NenhumaFonte = "Escolha ao menos uma fonte para a análise.";
+
+    private const string PromptVazio = "Escreva o prompt da análise.";
+
+    private const string AnexoRepetido = "O mesmo anexo foi escolhido mais de uma vez.";
+
+    private const string AnexoForaDaTarefa = "O anexo não está mais na tarefa no Asana.";
+
+    private const string TarefaExcluidaNoAsana = "A tarefa não existe mais no Asana.";
+
     private const string TarefaArquivada = "Tarefas arquivadas não podem ser analisadas.";
 
     private const string ItemDeVersaoAnterior = "Só os itens da análise atual podem ser marcados.";
 
     private const string GrupoPadrao = "Geral";
 
-    public async Task<AnaliseResultado> AnalisarAsync(Guid tarefaIdentifier, CancellationToken cancellationToken)
+    public async Task<AnaliseResultado> AnalisarAsync(Guid tarefaIdentifier, FontesDaAnaliseRequest? fontes, CancellationToken cancellationToken)
     {
         // Com tracking: os comentários trazidos do Asana são gravados na tarefa.
         var tarefa = await context.Set<Tarefa>()
@@ -65,6 +76,13 @@ internal sealed class AnaliseService(
             throw new DomainException(TarefaArquivada);
         }
 
+        // Validação do pedido antes de qualquer chamada ao Asana ou à Anthropic.
+        var (pedido, erros) = LerFontes(fontes);
+        if (pedido is null)
+        {
+            return AnaliseResultado.FontesInvalidas(erros!);
+        }
+
         if (!emAndamento.TentarIniciar(tarefa.Id))
         {
             return AnaliseResultado.EmAndamento;
@@ -72,12 +90,18 @@ internal sealed class AnaliseService(
 
         try
         {
-            // Comentários feitos no Asana depois da última sincronização entram como novidade (não lidos). Se o
-            // Asana falhar, a exceção sobe antes de chamar a IA e nada é gravado.
+            // Comentários feitos no Asana depois da última sincronização entram como novidade (não lidos), mesmo
+            // quando não vão para a IA. Se o Asana falhar, a exceção sobe antes de chamar a IA e nada é gravado.
             var stories = await asana.ListarStoriesAsync(tarefa.AsanaGid, cancellationToken);
             if (tarefa.AdicionarComentarios(stories, lidos: false) > 0)
             {
                 await context.SaveChangesAsync(cancellationToken);
+            }
+
+            var (anexos, errosDosAnexos) = await BaixarAnexosAsync(tarefa.AsanaGid, pedido.Anexos, cancellationToken);
+            if (anexos is null)
+            {
+                return AnaliseResultado.FontesInvalidas(errosDosAnexos!);
             }
 
             var empresa = await context.Set<Empresa>()
@@ -88,17 +112,23 @@ internal sealed class AnaliseService(
             var demanda = new DemandaParaAnalise(
                 empresa,
                 tarefa.Titulo,
-                tarefa.Descricao,
+                pedido.Descricao ? tarefa.Descricao : null,
                 tarefa.Projetos,
-                tarefa.Comentarios
-                    .OrderBy(comentario => comentario.CriadoEm)
-                    .ThenBy(comentario => comentario.Id)
-                    .Select(comentario => new ComentarioDaDemanda(comentario.Autor, comentario.CriadoEm, comentario.Texto))
-                    .ToList(),
-                tarefa.Retrabalhos
-                    .OrderBy(retrabalho => retrabalho.Numero)
-                    .Select(retrabalho => new RetrabalhoDaDemanda(retrabalho.Numero, retrabalho.ReabertaEm, retrabalho.ReabertaPor))
-                    .ToList());
+                pedido.Comentarios
+                    ? tarefa.Comentarios
+                        .OrderBy(comentario => comentario.CriadoEm)
+                        .ThenBy(comentario => comentario.Id)
+                        .Select(comentario => new ComentarioDaDemanda(comentario.Autor, comentario.CriadoEm, comentario.Texto))
+                        .ToList()
+                    : null,
+                pedido.Comentarios
+                    ? tarefa.Retrabalhos
+                        .OrderBy(retrabalho => retrabalho.Numero)
+                        .Select(retrabalho => new RetrabalhoDaDemanda(retrabalho.Numero, retrabalho.ReabertaEm, retrabalho.ReabertaPor))
+                        .ToList()
+                    : null,
+                pedido.Prompt,
+                anexos.Select(anexo => new ArquivoDaDemanda(anexo.Nome, anexo.Conteudo)).ToList());
 
             // Fora de transação: a chamada à IA pode levar dezenas de segundos. Se falhar, nada é gravado.
             var estruturada = await analisador.AnalisarAsync(demanda, cancellationToken);
@@ -108,14 +138,15 @@ internal sealed class AnaliseService(
                 tarefa.Id,
                 anterior,
                 estruturada.Objetivo,
-                estruturada.Checklist.Select(item => ((string?)item.Grupo, item.Texto, item.Vago)).ToList(),
+                estruturada.Checklist.Select(item => ((string?)item.Grupo, item.Texto, item.Vago, item.Origem, item.Trecho)).ToList(),
                 estruturada.Testes,
                 estruturada.Duvidas.Select(duvida => (duvida.Texto, duvida.Origem, duvida.Trecho)).ToList(),
                 estruturada.Regras.Select(regra => (regra.Texto, regra.Origem)).ToList(),
                 estruturada.Modelo,
                 estruturada.TokensEntrada,
                 estruturada.TokensSaida,
-                Agora());
+                Agora(),
+                pedido with { Anexos = anexos.Select(anexo => (anexo.Gid, anexo.Nome)).ToList() });
 
             context.Add(analise);
             await context.SaveChangesAsync(cancellationToken);
@@ -126,6 +157,120 @@ internal sealed class AnaliseService(
         {
             emAndamento.Finalizar(tarefa.Id);
         }
+    }
+
+    /// <summary>
+    /// Read the requested sources with their defaults (no body: description and comments), or the messages per
+    /// field when they are invalid. In the prompt mode the description is never sent.
+    /// </summary>
+    private static (FontesDaAnalise? Fontes, Dictionary<string, string[]>? Erros) LerFontes(FontesDaAnaliseRequest? fontes)
+    {
+        var modo = fontes?.Modo ?? ModoDaAnalise.Tarefa;
+        var descricao = modo == ModoDaAnalise.Tarefa && (fontes?.Descricao ?? true);
+        var comentarios = fontes?.Comentarios ?? modo == ModoDaAnalise.Tarefa;
+        var anexos = (fontes?.Anexos ?? [])
+            .Where(gid => !string.IsNullOrWhiteSpace(gid))
+            .Select(gid => gid.Trim())
+            .ToList();
+        var prompt = modo == ModoDaAnalise.Prompt && !string.IsNullOrWhiteSpace(fontes?.Prompt) ? fontes.Prompt.Trim() : null;
+
+        var erros = new Dictionary<string, string[]>();
+        if (modo == ModoDaAnalise.Prompt && prompt is null)
+        {
+            erros["Prompt"] = [PromptVazio];
+        }
+        else if (prompt is { Length: > Analise.PromptMaxLength })
+        {
+            erros["Prompt"] = [$"O prompt deve ter no máximo {Analise.PromptMaxLength} caracteres."];
+        }
+
+        if (anexos.Distinct(StringComparer.Ordinal).Count() != anexos.Count)
+        {
+            erros["Anexos"] = [AnexoRepetido];
+        }
+
+        if (modo == ModoDaAnalise.Tarefa && !descricao && !comentarios && anexos.Count == 0)
+        {
+            erros["Fontes"] = [NenhumaFonte];
+        }
+
+        if (erros.Count > 0)
+        {
+            return (null, erros);
+        }
+
+        return (new FontesDaAnalise(modo, descricao, comentarios, prompt, anexos.Select(gid => (gid, string.Empty)).ToList()), null);
+    }
+
+    /// <summary>
+    /// Check that every requested attachment is in the task and readable, within the total limit, and download
+    /// them now from the Asana, in order; or the messages of the <c>Anexos</c> field
+    /// </summary>
+    private async Task<(List<(string Gid, string Nome, byte[] Conteudo)>? Anexos, Dictionary<string, string[]>? Erros)> BaixarAnexosAsync(
+        string tarefaGid,
+        IReadOnlyList<(string Gid, string Nome)> pedidos,
+        CancellationToken cancellationToken)
+    {
+        if (pedidos.Count == 0)
+        {
+            return ([], null);
+        }
+
+        var daTarefa = await asana.ListarAnexosAsync(tarefaGid, cancellationToken)
+            ?? throw new DomainException(TarefaExcluidaNoAsana);
+        var porGid = daTarefa.ToDictionary(anexo => anexo.Gid, StringComparer.Ordinal);
+
+        var mensagens = new List<string>();
+        long total = 0;
+        foreach (var (gid, _) in pedidos)
+        {
+            if (!porGid.TryGetValue(gid, out var anexo))
+            {
+                mensagens.Add(AnexoForaDaTarefa);
+                continue;
+            }
+
+            var legibilidade = arquivos.Avaliar(anexo.Nome, anexo.Tamanho, anexo.Hospedagem);
+            if (!legibilidade.Legivel)
+            {
+                mensagens.Add($"{anexo.Nome}: {legibilidade.Motivo}");
+            }
+
+            total += anexo.Tamanho ?? 0;
+        }
+
+        if (mensagens.Count == 0 && total > arquivos.TamanhoTotalMaximo)
+        {
+            mensagens.Add(arquivos.MensagemDoTotalMaximo);
+        }
+
+        if (mensagens.Count > 0)
+        {
+            return (null, new Dictionary<string, string[]> { ["Anexos"] = [.. mensagens.Distinct()] });
+        }
+
+        // Em sequência: o Asana limita as requisições por minuto.
+        var baixados = new List<(string Gid, string Nome, byte[] Conteudo)>();
+        total = 0;
+        foreach (var (gid, _) in pedidos)
+        {
+            var conteudo = await asana.BaixarAnexoAsync(gid, arquivos.TamanhoMaximo(porGid[gid].Nome), cancellationToken);
+            if (conteudo is null || conteudo.TarefaGid != tarefaGid)
+            {
+                return (null, new Dictionary<string, string[]> { ["Anexos"] = [AnexoForaDaTarefa] });
+            }
+
+            total += conteudo.Conteudo.LongLength;
+            if (total > arquivos.TamanhoTotalMaximo)
+            {
+                return (null, new Dictionary<string, string[]> { ["Anexos"] = [arquivos.MensagemDoTotalMaximo] });
+            }
+
+            var nome = string.IsNullOrEmpty(conteudo.Nome) ? porGid[gid].Nome : conteudo.Nome;
+            baixados.Add((gid, nome, conteudo.Conteudo));
+        }
+
+        return (baixados, null);
     }
 
     public async Task<IReadOnlyList<AnaliseResponse>?> ListarAsync(Guid tarefaIdentifier, CancellationToken cancellationToken)
@@ -224,7 +369,15 @@ internal sealed class AnaliseService(
             analise.Modelo,
             analise.TokensEntrada,
             analise.TokensSaida,
-            analise.AnalisadaEm);
+            analise.AnalisadaEm,
+            analise.Fontes is { } fontes
+                ? new FontesDaAnaliseResponse(
+                    fontes.Modo,
+                    fontes.Descricao,
+                    fontes.Comentarios,
+                    fontes.Anexos.Select(anexo => new AnexoDaFonteResponse(anexo.Gid, anexo.Nome)).ToList(),
+                    fontes.Prompt)
+                : null);
     }
 
     private static AnaliseItemResponse ParaResposta(AnaliseItem item)

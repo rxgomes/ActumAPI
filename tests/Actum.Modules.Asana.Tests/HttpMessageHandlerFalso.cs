@@ -59,6 +59,19 @@ public sealed class HttpMessageHandlerFalso : HttpMessageHandler
         return this;
     }
 
+    /// <summary>
+    /// Enfileira uma resposta <c>200</c> com o corpo binário (download de arquivo)
+    /// </summary>
+    public HttpMessageHandlerFalso ResponderBytes(byte[] conteudo)
+    {
+        lock (_trava)
+        {
+            _respostas.Enqueue(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(conteudo) });
+        }
+
+        return this;
+    }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var corpo = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);

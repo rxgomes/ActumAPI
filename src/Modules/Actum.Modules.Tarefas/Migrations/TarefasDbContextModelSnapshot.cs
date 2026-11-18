@@ -43,6 +43,24 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasColumnName("create_in")
                         .HasDefaultValueSql("localtimestamp");
 
+                    b.Property<bool?>("FonteComentarios")
+                        .HasColumnType("boolean")
+                        .HasColumnName("fonte_comentarios");
+
+                    b.Property<bool?>("FonteDescricao")
+                        .HasColumnType("boolean")
+                        .HasColumnName("fonte_descricao");
+
+                    b.Property<string>("FonteModo")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("fonte_modo");
+
+                    b.Property<string>("FontePrompt")
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)")
+                        .HasColumnName("fonte_prompt");
+
                     b.Property<Guid>("Identifier")
                         .HasColumnType("uuid")
                         .HasColumnName("identifier")
@@ -1017,6 +1035,51 @@ namespace Actum.Modules.Tarefas.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_analise_tarefa_tarefa_id");
+
+                    b.OwnsMany("Actum.Modules.Tarefas.Domain.AnaliseFonteAnexo", "FonteAnexos", b1 =>
+                        {
+                            b1.Property<long>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("bigint")
+                                .HasColumnName("id");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<long>("Id"));
+
+                            b1.Property<long>("AnaliseId")
+                                .HasColumnType("bigint")
+                                .HasColumnName("analise_id");
+
+                            b1.Property<string>("AnexoGid")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("anexo_gid");
+
+                            b1.Property<string>("Nome")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("nome");
+
+                            b1.Property<short>("Ordem")
+                                .HasColumnType("smallint")
+                                .HasColumnName("ordem");
+
+                            b1.HasKey("Id")
+                                .HasName("pk_analise_fonte_anexo");
+
+                            b1.HasIndex("AnaliseId", "Ordem")
+                                .IsUnique()
+                                .HasDatabaseName("ix_analise_fonte_anexo_analise_id_ordem");
+
+                            b1.ToTable("analise_fonte_anexo", "tarefas");
+
+                            b1.WithOwner()
+                                .HasForeignKey("AnaliseId")
+                                .HasConstraintName("fk_analise_fonte_anexo_analise_analise_id");
+                        });
+
+                    b.Navigation("FonteAnexos");
                 });
 
             modelBuilder.Entity("Actum.Modules.Tarefas.Domain.AnaliseItem", b =>

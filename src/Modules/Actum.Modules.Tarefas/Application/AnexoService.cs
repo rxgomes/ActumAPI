@@ -1,4 +1,5 @@
 using Actum.Modules.Asana.Application;
+using Actum.Modules.Claude.Application;
 using Actum.Modules.Tarefas.Contracts;
 using Actum.Modules.Tarefas.Domain;
 using Actum.Modules.Tarefas.Persistence;
@@ -9,9 +10,10 @@ namespace Actum.Modules.Tarefas.Application;
 
 /// <summary>
 /// <see cref="IAnexoService"/> over <see cref="TarefasDbContext"/> (to find the Asana task) and the public
-/// <see cref="IAsanaClient"/> contract of the Asana module
+/// <see cref="IAsanaClient"/> contract of the Asana module, with the readability for the analysis from the public
+/// <see cref="IArquivosDaAnalise"/> contract of the Claude module
 /// </summary>
-internal sealed class AnexoService(TarefasDbContext context, IAsanaClient asana) : IAnexoService
+internal sealed class AnexoService(TarefasDbContext context, IAsanaClient asana, IArquivosDaAnalise arquivos) : IAnexoService
 {
     private const string TarefaExcluidaNoAsana = "A tarefa não existe mais no Asana.";
 
@@ -30,7 +32,11 @@ internal sealed class AnexoService(TarefasDbContext context, IAsanaClient asana)
 
         return anexos
             .OrderBy(anexo => anexo.CriadoEm)
-            .Select(anexo => new AnexoResponse(anexo.Gid, anexo.Nome, anexo.CriadoEm, anexo.Tamanho, anexo.Hospedagem))
+            .Select(anexo =>
+            {
+                var legibilidade = arquivos.Avaliar(anexo.Nome, anexo.Tamanho, anexo.Hospedagem);
+                return new AnexoResponse(anexo.Gid, anexo.Nome, anexo.CriadoEm, anexo.Tamanho, anexo.Hospedagem, legibilidade.Legivel, legibilidade.Motivo);
+            })
             .ToList();
     }
 

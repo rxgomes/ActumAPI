@@ -71,6 +71,10 @@ internal sealed class AnalisadorDeDemanda(
             Timeout = TempoLimite,
         };
 
+        // Arquivos ilegíveis falham aqui, antes de qualquer chamada paga.
+        var conteudo = PromptDaDemanda.MontarConteudo(demanda, LimitesDosArquivos.Ler(configuration).MaxCaracteresDeTexto);
+        var temArquivos = demanda.Arquivos is { Count: > 0 };
+
         var parametros = new MessageCreateParams
         {
             Model = opcoes.Modelo,
@@ -83,11 +87,11 @@ internal sealed class AnalisadorDeDemanda(
                 Effort = Esforco(opcoes.Esforco),
                 Format = new BetaJsonOutputFormat { Schema = PromptDaDemanda.Esquema },
             },
-            Messages = [new BetaUserMessageParam { Content = PromptDaDemanda.MontarMensagem(demanda) }],
+            Messages = [new BetaUserMessageParam { Content = conteudo }],
         };
 
         var cronometro = Stopwatch.StartNew();
-        var resposta = await EnviarAsync(cliente, parametros, cancellationToken);
+        var resposta = await EnviarAsync(cliente, parametros, temArquivos, cancellationToken);
 
         var resultado = Interpretar(resposta);
 
@@ -140,7 +144,9 @@ internal sealed class AnalisadorDeDemanda(
             .Select(item => new ItemDoChecklist(
                 string.IsNullOrWhiteSpace(item!.Grupo) ? GrupoPadrao : item.Grupo.Trim(),
                 item.Texto!.Trim(),
-                string.IsNullOrWhiteSpace(item.Vago) ? null : item.Vago.Trim()))
+                string.IsNullOrWhiteSpace(item.Vago) ? null : item.Vago.Trim(),
+                string.IsNullOrWhiteSpace(item.Origem) ? null : item.Origem.Trim(),
+                string.IsNullOrWhiteSpace(item.Trecho) ? null : item.Trecho.Trim()))
             .ToList();
 
         // Regras são opcionais na leitura: uma resposta sem a lista vale como "sem regras".
@@ -170,7 +176,7 @@ internal sealed class AnalisadorDeDemanda(
             (int)resposta.Usage.OutputTokens);
     }
 
-    private async Task<BetaMessage> EnviarAsync(AnthropicClient cliente, MessageCreateParams parametros, CancellationToken cancellationToken)
+    private async Task<BetaMessage> EnviarAsync(AnthropicClient cliente, MessageCreateParams parametros, bool temArquivos, CancellationToken cancellationToken)
     {
         try
         {
@@ -199,6 +205,12 @@ internal sealed class AnalisadorDeDemanda(
         catch (AnthropicApiException erro) when (SemCredito(erro))
         {
             throw new ClaudeSemCreditoException(erro);
+        }
+        catch (AnthropicBadRequestException erro) when (temArquivos)
+        {
+            // Com anexos, um 400 costuma ser um arquivo que a Anthropic não aceita (PDF protegido, páginas demais...).
+            logger.LogWarning("A Claude API recusou a requisição de análise com anexos: {Status}", erro.StatusCode);
+            throw new ClaudeArquivoRejeitadoException(erro);
         }
         catch (AnthropicApiException erro)
         {
@@ -278,5 +290,11 @@ internal sealed class AnalisadorDeDemanda(
 
         [JsonPropertyName("vago")]
         public string? Vago { get; init; }
+
+        [JsonPropertyName("origem")]
+        public string? Origem { get; init; }
+
+        [JsonPropertyName("trecho")]
+        public string? Trecho { get; init; }
     }
 }
