@@ -37,7 +37,7 @@ public sealed class AnalisadorDeDemandaFalso : IAnalisadorDeDemanda
     public TaskCompletionSource Iniciada { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public static DemandaEstruturada Estruturada(string objetivo, string[] checklist, string[] duvidas, RegraDaDemanda[]? regras = null) =>
-        new(objetivo, checklist.Select(texto => new ItemDoChecklist("Geral", texto, null)).ToList(), [], duvidas, regras ?? [], "claude-opus-5-5", 1000, 200);
+        new(objetivo, checklist.Select(texto => new ItemDoChecklist("Geral", texto, null)).ToList(), [], duvidas.Select(texto => new DuvidaDaDemanda(texto, null, null)).ToList(), regras ?? [], "claude-opus-5-5", 1000, 200);
 
     public async Task<DemandaEstruturada> AnalisarAsync(DemandaParaAnalise demanda, CancellationToken cancellationToken)
     {

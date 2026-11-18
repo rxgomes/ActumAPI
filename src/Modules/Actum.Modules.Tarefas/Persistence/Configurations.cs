@@ -241,6 +241,7 @@ internal sealed class AnaliseItemConfiguration : IEntityTypeConfiguration<Analis
             .HasMaxLength(AnaliseItem.TipoMaxLength);
         builder.Property(item => item.Grupo).HasMaxLength(AnaliseItem.GrupoMaxLength);
         builder.Property(item => item.Origem).HasMaxLength(AnaliseItem.OrigemMaxLength);
+        builder.Property(item => item.Trecho).HasMaxLength(AnaliseItem.TrechoMaxLength);
         builder.HasIndex(item => new { item.AnaliseId, item.Tipo, item.Ordem }).IsUnique();
     }
 }

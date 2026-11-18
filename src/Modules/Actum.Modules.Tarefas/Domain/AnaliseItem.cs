@@ -13,6 +13,8 @@ public sealed class AnaliseItem : Entity
 
     public const int OrigemMaxLength = 200;
 
+    public const int TrechoMaxLength = 2000;
+
     internal AnaliseItem(
         TipoItemAnalise tipo,
         short ordem,
@@ -20,7 +22,8 @@ public sealed class AnaliseItem : Entity
         string? grupo,
         string? vago,
         DateTime? concluidoEm,
-        string? origem = null)
+        string? origem = null,
+        string? trecho = null)
     {
         Tipo = tipo;
         Ordem = ordem;
@@ -29,6 +32,7 @@ public sealed class AnaliseItem : Entity
         Vago = vago;
         ConcluidoEm = concluidoEm;
         Origem = origem is { Length: > OrigemMaxLength } ? origem[..OrigemMaxLength] : origem;
+        Trecho = trecho is { Length: > TrechoMaxLength } ? trecho[..TrechoMaxLength] : trecho;
     }
 
     /// <summary>
@@ -62,10 +66,16 @@ public sealed class AnaliseItem : Entity
     public string? Vago { get; private set; }
 
     /// <summary>
-    /// Where a rule came from (<c>descrição</c> or <c>comentário de Maria em 04/11/2026 14:30</c>);
-    /// <see langword="null"/> for the other types
+    /// Where a rule or the excerpt of a question came from (<c>descrição</c> or
+    /// <c>comentário de Maria em 04/11/2026 14:30</c>); <see langword="null"/> for the other types
     /// </summary>
     public string? Origem { get; private set; }
+
+    /// <summary>
+    /// Literal excerpt of the demand that raised a question; <see langword="null"/> for the other types and for
+    /// questions analyzed before the excerpt existed
+    /// </summary>
+    public string? Trecho { get; private set; }
 
     /// <summary>
     /// Local date and time when the item was marked; <see langword="null"/> while not marked

@@ -156,6 +156,11 @@ namespace Actum.Modules.Tarefas.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("tipo");
 
+                    b.Property<string>("Trecho")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("trecho");
+
                     b.Property<DateTime>("UpdateIn")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("update_in")

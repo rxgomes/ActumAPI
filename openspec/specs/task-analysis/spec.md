@@ -112,3 +112,14 @@ A análise SHALL trazer, além do checklist, dos testes e das dúvidas, a seçã
 #### Scenario: Marcação herdada de regra
 - **WHEN** a nova versão tem uma regra com o mesmo texto de uma regra marcada na versão anterior
 - **THEN** a regra da nova versão MUST entrar marcada, com a data da marcação original
+
+### Requirement: Trecho que gerou cada dúvida
+Cada dúvida para o solicitante SHALL trazer a origem (`título`, `descrição` ou o comentário, com o autor e a data e hora `dd/MM/yyyy HH:mm`) e o trecho literal do contexto que gerou a pergunta, para que quem pediu reconheça de onde ela saiu. A IA MUST NOT perguntar o que a descrição ou os comentários já respondem, diretamente ou por um princípio geral (por exemplo, uma justificativa com "pois"); nesse caso, o princípio MUST virar regra.
+
+#### Scenario: Dúvida sobre a descrição
+- **WHEN** a análise gera uma dúvida a partir de uma frase da descrição
+- **THEN** a dúvida MUST vir com origem `descrição` e o trecho com a frase copiada sem alteração
+
+#### Scenario: Dúvidas de análises antigas
+- **WHEN** uma versão da análise foi feita antes do trecho existir
+- **THEN** as dúvidas dessa versão MUST vir com `origem` e `trecho` nulos

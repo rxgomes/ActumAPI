@@ -65,7 +65,12 @@ public sealed class AnalisadorDeDemandaTests
                 new { grupo = "", texto = "Revisar", vago = "" },
             },
             testes = new[] { "Emitir a NF 2958 de Barra Mansa", " " },
-            duvidas = new[] { "Quais fluxos de pagamento?" },
+            duvidas = new[]
+            {
+                new { texto = " Quais fluxos de pagamento? ", origem = " descrição ", trecho = " Somar o IPI no pagamento. " },
+                new { texto = "Qual filial?", origem = "", trecho = "" },
+                new { texto = " ", origem = "descrição", trecho = "x" },
+            },
         }));
 
         var resultado = await Criar().AnalisarAsync(Demanda, TestContext.Current.CancellationToken);
@@ -78,7 +83,12 @@ public sealed class AnalisadorDeDemandaTests
             ],
             resultado.Checklist);
         Assert.Equal(["Emitir a NF 2958 de Barra Mansa"], resultado.Testes);
-        Assert.Equal(["Quais fluxos de pagamento?"], resultado.Duvidas);
+        Assert.Equal(
+            [
+                new DuvidaDaDemanda("Quais fluxos de pagamento?", "descrição", "Somar o IPI no pagamento."),
+                new DuvidaDaDemanda("Qual filial?", null, null),
+            ],
+            resultado.Duvidas);
         Assert.Empty(resultado.Regras);
     }
 

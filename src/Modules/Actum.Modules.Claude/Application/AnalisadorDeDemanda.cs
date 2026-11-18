@@ -151,11 +151,19 @@ internal sealed class AnalisadorDeDemanda(
                 string.IsNullOrWhiteSpace(regra.Origem) ? OrigemPadrao : regra.Origem.Trim()))
             .ToList();
 
+        var duvidas = conteudo.Duvidas
+            .Where(duvida => duvida is not null && !string.IsNullOrWhiteSpace(duvida.Texto))
+            .Select(duvida => new DuvidaDaDemanda(
+                duvida!.Texto!.Trim(),
+                string.IsNullOrWhiteSpace(duvida.Origem) ? null : duvida.Origem.Trim(),
+                string.IsNullOrWhiteSpace(duvida.Trecho) ? null : duvida.Trecho.Trim()))
+            .ToList();
+
         return new DemandaEstruturada(
             objetivo,
             checklist,
             Limpar(conteudo.Testes),
-            Limpar(conteudo.Duvidas),
+            duvidas,
             regras,
             resposta.Model.Raw(),
             (int)resposta.Usage.InputTokens,
@@ -233,10 +241,22 @@ internal sealed class AnalisadorDeDemanda(
         public List<string?>? Testes { get; init; }
 
         [JsonPropertyName("duvidas")]
-        public List<string?>? Duvidas { get; init; }
+        public List<DuvidaJson?>? Duvidas { get; init; }
 
         [JsonPropertyName("regras")]
         public List<RegraJson?>? Regras { get; init; }
+    }
+
+    private sealed class DuvidaJson
+    {
+        [JsonPropertyName("texto")]
+        public string? Texto { get; init; }
+
+        [JsonPropertyName("origem")]
+        public string? Origem { get; init; }
+
+        [JsonPropertyName("trecho")]
+        public string? Trecho { get; init; }
     }
 
     private sealed class RegraJson

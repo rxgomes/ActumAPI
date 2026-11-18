@@ -49,7 +49,7 @@ public sealed class AnthropicFalso : HttpMessageHandler
             objetivo,
             checklist = checklist.Select(texto => new { grupo = "Geral", texto, vago = "" }),
             testes = Array.Empty<string>(),
-            duvidas,
+            duvidas = duvidas.Select(texto => new { texto, origem = "descrição", trecho = "" }),
         }));
 
     /// <summary>

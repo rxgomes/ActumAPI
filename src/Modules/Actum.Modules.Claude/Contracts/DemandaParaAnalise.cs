@@ -39,7 +39,7 @@ public sealed record RetrabalhoDaDemanda(short Numero, DateTime ReabertaEm, stri
 /// <param name="Objetivo">Expected result, in a few sentences</param>
 /// <param name="Checklist">Verifiable actions, grouped by area, in execution order</param>
 /// <param name="Testes">How to validate the delivery (test cases and reference data)</param>
-/// <param name="Duvidas">Open questions to the requester</param>
+/// <param name="Duvidas">Open questions to the requester, each with the excerpt that raised it</param>
 /// <param name="Regras">Business rules, constraints and suggestions to respect, each with where it came from</param>
 /// <param name="Modelo">Model that actually answered</param>
 /// <param name="TokensEntrada">Input tokens consumed</param>
@@ -48,7 +48,7 @@ public sealed record DemandaEstruturada(
     string Objetivo,
     IReadOnlyList<ItemDoChecklist> Checklist,
     IReadOnlyList<string> Testes,
-    IReadOnlyList<string> Duvidas,
+    IReadOnlyList<DuvidaDaDemanda> Duvidas,
     IReadOnlyList<RegraDaDemanda> Regras,
     string Modelo,
     int TokensEntrada,
@@ -61,6 +61,17 @@ public sealed record DemandaEstruturada(
 /// <param name="Texto">Action to do</param>
 /// <param name="Vago">Why the action is vague in the demand; <see langword="null"/> when it is clear</param>
 public sealed record ItemDoChecklist(string Grupo, string Texto, string? Vago);
+
+/// <summary>
+/// Question to the requester
+/// </summary>
+/// <param name="Texto">The question</param>
+/// <param name="Origem">
+/// Where the excerpt came from: <c>título</c>, <c>descrição</c> or <c>comentário de &lt;autor&gt; em &lt;dd/MM/yyyy HH:mm&gt;</c>;
+/// <see langword="null"/> when not informed
+/// </param>
+/// <param name="Trecho">Literal excerpt of the context that raised the question; <see langword="null"/> when not informed</param>
+public sealed record DuvidaDaDemanda(string Texto, string? Origem, string? Trecho);
 
 /// <summary>
 /// Rule, constraint or suggestion of the demand

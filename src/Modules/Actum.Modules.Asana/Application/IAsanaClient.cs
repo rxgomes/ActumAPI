@@ -118,6 +118,29 @@ public interface IAsanaClient
     Task<AsanaAnexo> AnexarArquivoAsync(string tarefaGid, string nome, string tipo, Stream conteudo, CancellationToken cancellationToken);
 
     /// <summary>
+    /// List the files attached to a task (in the task itself or in its comments), across all pages, in the Asana order
+    /// </summary>
+    /// <param name="tarefaGid">Task identifier</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The attachments, or <see langword="null"/> when the task does not exist (deleted)</returns>
+    /// <author>Ricardo Gomes</author>
+    /// <created>2026-11-13</created>
+    /// <modified>2026-11-13</modified>
+    Task<IReadOnlyList<AsanaAnexoDaTarefa>?> ListarAnexosAsync(string tarefaGid, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get a fresh address to download an attachment (the Asana download addresses expire in a few minutes), with
+    /// the task it belongs to
+    /// </summary>
+    /// <param name="anexoGid">Attachment identifier</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The download data, or <see langword="null"/> when the attachment does not exist (deleted)</returns>
+    /// <author>Ricardo Gomes</author>
+    /// <created>2026-11-13</created>
+    /// <modified>2026-11-13</modified>
+    Task<AsanaDownloadDoAnexo?> ObterDownloadDoAnexoAsync(string anexoGid, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Publish a comment on a task, mentioning the given users at the beginning (they are notified by the Asana).
     /// The text is published exactly as typed, with its line breaks. Fails with
     /// <see cref="AsanaRequisicaoRecusadaException"/> when the Asana rejects it or the task no longer exists.

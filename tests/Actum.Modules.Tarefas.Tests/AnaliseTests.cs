@@ -1,3 +1,4 @@
+using Actum.Modules.Claude.Contracts;
 using Actum.Modules.Claude.Errors;
 using Actum.Modules.Tarefas.Application;
 using Actum.Modules.Tarefas.Domain;
@@ -62,7 +63,7 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
                 new("Back: integração TecnoSpeed", "Preencher ValorIpiDevolvido", null),
             ],
             ["Emitir a NF 2958 de Barra Mansa"],
-            ["Quais fluxos de pagamento?"],
+            [new("Quais fluxos de pagamento?", null, null)],
             [],
             "claude-opus-5-5",
             1000,
@@ -331,6 +332,30 @@ public sealed class AnaliseTests(PostgresFixture postgres) : SincronizacaoTestBa
         var segunda = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
 
         Assert.Equal((true, (DateTime?)Agora), (Assert.Single(segunda.Regras).Concluido, segunda.Regras[0].ConcluidoEm));
+    }
+
+    [Fact]
+    public async Task DuvidasGravadasComOrigemETrechoQueAsGerouAsync()
+    {
+        var tarefa = await TarefaComComentariosAsync();
+        _ia.Resultado = AnalisadorDeDemandaFalso.Estruturada("O", ["Ajustar cálculo"], []) with
+        {
+            Duvidas =
+            [
+                new DuvidaDaDemanda("Trocar o cliente repreenche os campos?", "descrição", "Não devem ser preenchidos ao salvar, mas ao criar."),
+                new DuvidaDaDemanda("Qual filial?", null, null),
+            ],
+        };
+
+        var analise = (await AnaliseAsync(service => service.AnalisarAsync(tarefa, Ct))).Analise!;
+
+        Assert.Equal(
+            [
+                ("Trocar o cliente repreenche os campos?", "descrição", "Não devem ser preenchidos ao salvar, mas ao criar."),
+                ("Qual filial?", (string?)null, (string?)null),
+            ],
+            analise.Duvidas.Select(duvida => (duvida.Texto, duvida.Origem, duvida.Trecho)));
+        Assert.All(analise.Plano().Concat(analise.Regras), item => Assert.Null(item.Trecho));
     }
 
     [Fact]

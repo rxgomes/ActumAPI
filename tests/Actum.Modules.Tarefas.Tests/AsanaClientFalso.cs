@@ -180,6 +180,27 @@ public sealed class AsanaClientFalso : IAsanaClient
         return Task.FromResult(participantes);
     }
 
+    /// <summary>
+    /// Anexos já existentes por tarefa; tarefa ausente responde como excluída no Asana (<see langword="null"/>)
+    /// </summary>
+    public Dictionary<string, List<AsanaAnexoDaTarefa>> AnexosDaTarefa { get; } = [];
+
+    /// <summary>
+    /// Dados de download por gid do anexo; anexo ausente responde como excluído (<see langword="null"/>)
+    /// </summary>
+    public Dictionary<string, AsanaDownloadDoAnexo> Downloads { get; } = [];
+
+    public Task<IReadOnlyList<AsanaAnexoDaTarefa>?> ListarAnexosAsync(string tarefaGid, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<AsanaAnexoDaTarefa>? anexos = AnexosDaTarefa.TryGetValue(tarefaGid, out var lista) ? [.. lista] : null;
+        return Task.FromResult(anexos);
+    }
+
+    public Task<AsanaDownloadDoAnexo?> ObterDownloadDoAnexoAsync(string anexoGid, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Downloads.GetValueOrDefault(anexoGid));
+    }
+
     public async Task<AsanaAnexo> AnexarArquivoAsync(string tarefaGid, string nome, string tipo, Stream conteudo, CancellationToken cancellationToken)
     {
         using var memoria = new MemoryStream();

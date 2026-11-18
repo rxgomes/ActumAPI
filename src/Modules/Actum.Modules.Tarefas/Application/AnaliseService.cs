@@ -110,7 +110,7 @@ internal sealed class AnaliseService(
                 estruturada.Objetivo,
                 estruturada.Checklist.Select(item => ((string?)item.Grupo, item.Texto, item.Vago)).ToList(),
                 estruturada.Testes,
-                estruturada.Duvidas,
+                estruturada.Duvidas.Select(duvida => (duvida.Texto, duvida.Origem, duvida.Trecho)).ToList(),
                 estruturada.Regras.Select(regra => (regra.Texto, regra.Origem)).ToList(),
                 estruturada.Modelo,
                 estruturada.TokensEntrada,
@@ -238,6 +238,7 @@ internal sealed class AnaliseService(
             item.Vago,
             item.ConcluidoEm is not null,
             item.ConcluidoEm,
-            item.Origem);
+            item.Origem,
+            item.Trecho);
     }
 }

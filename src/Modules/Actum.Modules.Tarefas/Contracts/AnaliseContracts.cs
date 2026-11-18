@@ -55,8 +55,12 @@ public sealed record GrupoDoChecklistResponse(string Nome, IReadOnlyList<Analise
 /// <param name="Concluido">Done (checklist), tested (test), resolved (question) or respected (rule)</param>
 /// <param name="ConcluidoEm">Local date and time of the marking; <see langword="null"/> when not marked</param>
 /// <param name="Origem">
-/// Where a rule came from (<c>descrição</c> or <c>comentário de Maria em 04/11/2026 14:30</c>);
-/// <see langword="null"/> for the other types
+/// Where a rule or the excerpt of a question came from (<c>descrição</c> or
+/// <c>comentário de Maria em 04/11/2026 14:30</c>); <see langword="null"/> for the other types
+/// </param>
+/// <param name="Trecho">
+/// Literal excerpt of the demand that raised a question; <see langword="null"/> for the other types and for
+/// questions analyzed before the excerpt existed
 /// </param>
 public sealed record AnaliseItemResponse(
     Guid Identifier,
@@ -67,7 +71,8 @@ public sealed record AnaliseItemResponse(
     string? Vago,
     bool Concluido,
     DateTime? ConcluidoEm,
-    string? Origem);
+    string? Origem,
+    string? Trecho);
 
 /// <summary>
 /// Marking of an analysis item

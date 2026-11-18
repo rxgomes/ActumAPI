@@ -82,6 +82,10 @@ public sealed class PromptDaDemandaTests
         var regra = PromptDaDemanda.Esquema["properties"].GetProperty("regras").GetProperty("items");
         Assert.False(regra.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(["texto", "origem"], regra.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
+
+        var duvida = PromptDaDemanda.Esquema["properties"].GetProperty("duvidas").GetProperty("items");
+        Assert.False(duvida.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(["texto", "origem", "trecho"], duvida.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
     }
 
     [Fact]
@@ -91,5 +95,14 @@ public sealed class PromptDaDemandaTests
         Assert.Contains("comentário de <autor> em <data>", PromptDaDemanda.Sistema);
         Assert.Contains("Considere todos os comentários", PromptDaDemanda.Sistema);
         Assert.DoesNotContain("conversas que não alteram o que deve ser feito", PromptDaDemanda.Sistema);
+    }
+
+    [Fact]
+    public void Instrucoes_evitam_duvidas_ja_respondidas_por_principio_do_contexto()
+    {
+        Assert.Contains("Antes de incluir cada pergunta", PromptDaDemanda.Sistema);
+        Assert.Contains("também responde os casos", PromptDaDemanda.Sistema);
+        Assert.Contains("justificativa como regra geral", PromptDaDemanda.Sistema);
+        Assert.Contains("- trecho: cópia literal", PromptDaDemanda.Sistema);
     }
 }

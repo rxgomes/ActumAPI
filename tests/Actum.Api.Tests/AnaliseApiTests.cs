@@ -233,7 +233,7 @@ public sealed class AnaliseApiTests(PostgresFixture postgres) : IAsyncLifetime
                 objetivo,
                 checklist = checklist.Select(texto => new { grupo = "Back", texto, vago = "" }),
                 testes = new[] { "Emitir a NF 2958" },
-                duvidas,
+                duvidas = duvidas.Select(texto => new { texto, origem = "descrição", trecho = "" }),
             }),
             "end_turn");
     }

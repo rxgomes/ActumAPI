@@ -31,6 +31,7 @@ public sealed class TarefasModule : IModule
         services.AddScoped<IPainelService, PainelService>();
         services.AddScoped<IAnaliseService, AnaliseService>();
         services.AddScoped<IComentarioService, ComentarioService>();
+        services.AddScoped<IAnexoService, AnexoService>();
         services.AddScoped<IRetrabalhoService, RetrabalhoService>();
         services.AddScoped<IAnotacaoService, AnotacaoService>();
         services.AddScoped<WorktreesLocais>();
@@ -61,6 +62,7 @@ public sealed class TarefasModule : IModule
         endpoints.MapTarefaEndpoints();
         endpoints.MapAnaliseEndpoints();
         endpoints.MapComentarioEndpoints();
+        endpoints.MapAnexoEndpoints();
         endpoints.MapRetrabalhoEndpoints();
         endpoints.MapAnotacaoEndpoints();
     }

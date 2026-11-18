@@ -172,6 +172,39 @@ internal sealed class AsanaClient(HttpClient httpClient, IConfiguration configur
         return new AsanaAnexo(anexo.Gid, anexo.Name ?? nome);
     }
 
+    public async Task<IReadOnlyList<AsanaAnexoDaTarefa>?> ListarAnexosAsync(string tarefaGid, CancellationToken cancellationToken)
+    {
+        var caminho = $"attachments?parent={Escapar(tarefaGid)}&limit={TamanhoDaPagina}&opt_fields=name,created_at,size,host";
+        var anexos = await ListarTodasAsPaginasAsync<AnexoJson>(caminho, true, cancellationToken);
+
+        return anexos?
+            .Select(anexo => new AsanaAnexoDaTarefa(
+                anexo.Gid,
+                anexo.Name ?? string.Empty,
+                ParaHorarioLocal(anexo.CreatedAt),
+                anexo.Size,
+                anexo.Host ?? string.Empty))
+            .ToList();
+    }
+
+    public async Task<AsanaDownloadDoAnexo?> ObterDownloadDoAnexoAsync(string anexoGid, CancellationToken cancellationToken)
+    {
+        var envelope = await EnviarAsync<DownloadJson>(
+            HttpMethod.Get, $"attachments/{Escapar(anexoGid)}?opt_fields=name,download_url,view_url,parent", null, true, cancellationToken);
+        if (envelope is null)
+        {
+            return null;
+        }
+
+        var anexo = Dados(envelope);
+        var endereco = Endereco(anexo.DownloadUrl) ?? Endereco(anexo.ViewUrl);
+
+        return new AsanaDownloadDoAnexo(anexo.Name ?? string.Empty, anexo.Parent?.Gid, endereco);
+
+        static Uri? Endereco(string? valor) =>
+            Uri.TryCreate(valor, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri : null;
+    }
+
     public async Task<AsanaStory> ComentarAsync(string tarefaGid, string texto, IReadOnlyList<string> mencoes, CancellationToken cancellationToken)
     {
         var dados = new { html_text = HtmlDoComentario(texto, mencoes) };
@@ -215,13 +248,26 @@ internal sealed class AsanaClient(HttpClient httpClient, IConfiguration configur
 
     private async Task<List<T>> ListarTodasAsPaginasAsync<T>(string caminho, CancellationToken cancellationToken)
     {
+        return (await ListarTodasAsPaginasAsync<T>(caminho, false, cancellationToken))!;
+    }
+
+    /// <summary>
+    /// Read every page of a listing. Returns <see langword="null"/> when the first page answers <c>404</c> and
+    /// <paramref name="nuloSeNaoEncontrado"/> is set.
+    /// </summary>
+    private async Task<List<T>?> ListarTodasAsPaginasAsync<T>(string caminho, bool nuloSeNaoEncontrado, CancellationToken cancellationToken)
+    {
         var itens = new List<T>();
         string? offset = null;
 
         do
         {
             var pagina = offset is null ? caminho : $"{caminho}&offset={Escapar(offset)}";
-            var envelope = await EnviarAsync<List<T>>(HttpMethod.Get, pagina, null, false, cancellationToken);
+            var envelope = await EnviarAsync<List<T>>(HttpMethod.Get, pagina, null, nuloSeNaoEncontrado && offset is null, cancellationToken);
+            if (envelope is null && nuloSeNaoEncontrado && offset is null)
+            {
+                return null;
+            }
 
             itens.AddRange(Dados(envelope));
             offset = envelope?.NextPage?.Offset;
@@ -445,4 +491,8 @@ internal sealed class AsanaClient(HttpClient httpClient, IConfiguration configur
         string? Text);
 
     private sealed record SeguidoresJson(List<RecursoJson>? Followers);
+
+    private sealed record AnexoJson(string Gid, string? Name, DateTimeOffset CreatedAt, long? Size, string? Host);
+
+    private sealed record DownloadJson(string Gid, string? Name, string? DownloadUrl, string? ViewUrl, RecursoJson? Parent);
 }

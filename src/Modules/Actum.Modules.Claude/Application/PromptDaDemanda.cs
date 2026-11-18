@@ -30,12 +30,25 @@ internal static class PromptDaDemanda
           clientes, filiais ou ambientes). Não repita esses testes no checklist. Se o contexto não indicar
           nada para testar, devolva a lista vazia.
         - duvidas: perguntas a fazer para quem pediu, apenas sobre lacunas, ambiguidades ou contradições reais no
-          contexto, de preferência ligadas aos itens marcados como vagos. Se não houver dúvida relevante,
-          devolva a lista vazia.
+          contexto, de preferência ligadas aos itens marcados como vagos. Antes de incluir cada pergunta,
+          procure a resposta na descrição e nos comentários, inclusive de forma indireta: uma justificativa ou
+          princípio geral (frases com "pois", "porque", "para que", "sempre", "nunca") também responde os casos
+          particulares que se encaixam nele. Se houver resposta direta ou por esse princípio, não pergunte:
+          registre como regra. Pergunte apenas quando o contexto permitir duas interpretações razoáveis que
+          levem a implementações diferentes. Se não houver dúvida relevante, devolva a lista vazia.
+          - texto: a pergunta, curta e direta.
+          - origem: de onde veio o trecho que gerou a pergunta, no mesmo formato das regras: exatamente
+            "descrição" ou "comentário de <autor> em <data>"; use "título" se veio do título.
+          - trecho: cópia literal, sem alterar palavras, do trecho do contexto que gerou a pergunta (de uma
+            frase a um parágrafo curto), para que quem pediu reconheça de onde ela saiu. Se a dúvida vier da
+            falta de algo que o contexto não menciona, copie o trecho mais próximo do assunto.
         - regras: regras de negócio, restrições, padrões a seguir, cuidados e sugestões que a entrega deve
           respeitar ou considerar, mas que não são uma ação a fazer (por exemplo, "o desconto não pode passar de
           10%", "não alterar o layout da nota", "sugiro reaproveitar a rotina de devolução"). Não repita aqui o
-          que já está no checklist ou nos testes. Se não houver, devolva a lista vazia.
+          que já está no checklist ou nos testes. Quando o texto justificar uma decisão, registre também a
+          justificativa como regra geral, aplicável a outros casos (por exemplo, de "preencher ao criar, pois
+          se o usuário mudar algo à mão, segue o dele" sai a regra "o que o usuário alterou manualmente
+          prevalece sobre o preenchimento automático"). Se não houver, devolva a lista vazia.
           - texto: a regra, curta e direta.
           - origem: de onde ela veio, exatamente "descrição" ou "comentário de <autor> em <data>", copiando o
             autor e a data do atributo do comentário (por exemplo, "comentário de Maria em 04/11/2026 14:30").
@@ -76,7 +89,22 @@ internal static class PromptDaDemanda
                 },
             },
             testes = new { type = "array", items = new { type = "string" } },
-            duvidas = new { type = "array", items = new { type = "string" } },
+            duvidas = new
+            {
+                type = "array",
+                items = new
+                {
+                    type = "object",
+                    additionalProperties = false,
+                    required = new[] { "texto", "origem", "trecho" },
+                    properties = new
+                    {
+                        texto = new { type = "string" },
+                        origem = new { type = "string" },
+                        trecho = new { type = "string" },
+                    },
+                },
+            },
             regras = new
             {
                 type = "array",
